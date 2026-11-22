@@ -73,6 +73,10 @@ class FPLClient:
         """Return live scoring data for *gameweek*."""
         return self._get(f"/event/{gameweek}/live/")
 
+    def get_league_standings(self, league_id: int, page: int = 1) -> dict[str, Any]:
+        """Return a classic league's standings (50 managers per page)."""
+        return self._get(f"/leagues-classic/{league_id}/standings/?page_standings={page}")
+
     # -- Authenticated endpoints ----------------------------------------------
 
     def get_my_team(self, manager_id: int) -> dict[str, Any]:

@@ -11,6 +11,7 @@ fpl_agent/
 ├── optimizer/        # Mixed-Integer Linear Program (MILP) via PuLP
 ├── planner/          # Recommendation assembly: transfers, lineup, captain, rationale
 ├── engine.py         # sync → forecast → optimise; shared by CLI and dashboard
+├── league.py         # mini-league standings, rivals' squads/chips, effective ownership, head-to-head
 ├── memory.py         # persistent memory of your team, transfers, chips, preferences
 ├── ui/app.py         # Streamlit dashboard
 └── cli/              # Click-based command-line interface with Rich output
@@ -26,7 +27,7 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-Put `FPL_MANAGER_ID` in `.env` (see `.env.example`).
+The team ID defaults to 7588693 (`DEFAULT_MANAGER_ID` in `fpl_agent/engine.py`); set `FPL_MANAGER_ID` in `.env` to use another (see `.env.example`).
 
 #### Logging in (optional, recommended)
 
@@ -55,9 +56,10 @@ python fpl_agent.py ui            # opens http://localhost:8501
 
 | Tab | What it shows |
 |---|---|
-| **Suggestions** | Projected points, gain vs. no transfers, recommended transfers, XI + bench with the stats behind each pick, captain/vice, chip outlook, per-GW plan |
+| **Suggestions** | Projected points, gain vs. no transfers, recommended transfers with close-call alternatives, XI + bench with the stats behind each pick, captain/vice, chip outlook, per-GW plan |
+| **League** | Mini-league standings, rivals' captains and chips, you vs a rival (gap, expected edge, rough chance to finish above, differentials), league effective ownership |
 | **My team** | Squad with purchase/selling prices and xPts, chip status by window, mini-league ranks, saved plans |
-| **Players** | Every player's forecast: filter by position, team, price, minutes; xG/90, xA/90, DC%, CS%, xPts per GW, xPts/£m |
+| **Players** | Every player's forecast: filter by position, team, price, minutes; xG/90, xA/90, share of team xG, finishing form, DC%, CS%, xPts per GW, xPts/£m, league EO |
 | **Fixtures** | Team × GW grid coloured by expected goals or clean-sheet chance from the model's team ratings; ratings and recent form |
 | **Memory** | Free-transfer/bank overrides, locked and banned players, notes (same file the CLI uses) |
 | **Model check** | Walk-forward backtest vs. a points-per-game baseline |
@@ -70,7 +72,7 @@ re-syncs.
 ### 3. Or use the terminal
 
 ```bash
-python fpl_agent.py recommend --manager-id 123456
+python fpl_agent.py recommend --manager-id 7588693
 ```
 
 Every run refreshes players and fixtures, re-fetches per-match history when the
@@ -117,7 +119,18 @@ Overrides are tied to the next deadline and expire after it. If the FPL API
 is unreachable, the agent plans from the last snapshot in memory. Chips are
 tracked per window (GW1–19 / GW20–38) with played / available / expired status.
 
-### 5. Check the model
+### 5. Your mini-league
+
+```bash
+python fpl_agent.py league                 # standings, rivals' captains and chips, you vs the leader
+python fpl_agent.py league --rival "isak"  # compare with someone else
+```
+
+The dashboard's **League** tab shows the same, plus who owns what in your league
+(effective ownership counts captains double) and the differentials on each side.
+League effective ownership also appears next to close-call transfer options.
+
+### 6. Check the model
 
 ```bash
 python fpl_agent.py backtest               # walk-forward accuracy on played gameweeks
@@ -140,8 +153,8 @@ python fpl_agent.py backtest               # walk-forward accuracy on played gam
 | Component | Source |
 |-----------|--------|
 | Appearance | P(play), P(60+ mins), expected minutes from recent team matches |
-| Goals, assists | xG/90 and xA/90 (recency-weighted, shrunk toward position average) × opponent-adjusted attack multiplier |
-| Clean sheet, goals conceded | Poisson on goals expected against, from team ratings |
+| Goals, assists | Role: share of the team's xG/xA while on the pitch (recency-weighted, shrunk toward position average) × team's expected goals in the fixture; plus 15% of recent finishing above/below xG |
+| Clean sheet, goals conceded | Negative binomial on goals expected against, from team ratings (calibrated; Poisson under-predicted clean sheets) |
 | Defensive contribution | Rate of hitting the DC threshold in 60+ min games, detected by rebuilding each match's points from the scoring rules |
 | Saves (GK), bonus, yellow cards | Per-90 rates, adjusted for fixture |
 | Availability | `chance_of_playing_next_round`, fading over 4 GWs; departed players 0 |
@@ -149,6 +162,8 @@ python fpl_agent.py backtest               # walk-forward accuracy on played gam
 `team_ratings.py` fits attack/defence ratings per team from a 70/30 blend of xG and goals, weighting recent matches more ("team form"), adjusting for opponent strength, and using FPL's team strength numbers as the early-season prior. Blank gameweeks score 0; double gameweeks sum both fixtures.
 
 `backtest.py` runs a walk-forward check against a points-per-game baseline.
+
+**[docs/MODEL.md](docs/MODEL.md)** explains every stat, which points it feeds, where it lives in the code, and the latest backtest results.
 
 ### `optimizer`
 
@@ -160,7 +175,7 @@ Solves a MILP with PuLP that picks the squad, a starting XI and a captain for ev
 ### `planner`
 
 `build_recommendation()` converts raw optimizer output into:
-- Transfer list (sell/buy with prices)
+- Transfer list (sell/buy with prices), with **close calls**: near-equal alternatives within ~1 xPt over the horizon that you could afford instead
 - Starting XI / bench / bench order
 - Captain & vice-captain
 - Expected-points delta and text rationale
@@ -183,9 +198,10 @@ Tests cover:
 |----------|-------------|
 | `FPL_REFRESH_TOKEN` | FPL login token from your browser (alternative to `--refresh-token`; see Logging in) |
 | `FPL_AUTH_FILE` | Where the rotated token is kept (default `.fpl_auth.json`) |
-| `FPL_MANAGER_ID` | Your FPL manager ID |
+| `FPL_MANAGER_ID` | Your FPL manager ID (default 7588693) |
 | `FPL_DB` | SQLite cache path (rebuilt automatically on a new season or schema change) |
 | `FPL_MEMORY` | Agent memory file (default `fpl_memory.json`) |
+| `FPL_LEAGUE_ID` | Mini-league to track (default: your first private classic league) |
 | `FPL_FREE_TRANSFERS`, `FPL_BANK` | Optional overrides; normally read from the API |
 
 ## License

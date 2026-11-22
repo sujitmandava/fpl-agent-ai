@@ -69,7 +69,7 @@ def get_plan(setup: engine.Setup, opts: PlanOptions):
 # -- Sidebar ------------------------------------------------------------------
 
 st.sidebar.title("FPL Agent")
-default_id = int(os.environ.get("FPL_MANAGER_ID") or 0)
+default_id = engine.manager_id_from_env()
 manager_id = st.sidebar.number_input("Manager ID", min_value=0, value=default_id, step=1)
 refresh = st.sidebar.button("Refresh from FPL", width="stretch")
 
@@ -121,6 +121,23 @@ gws = [int(c.removeprefix("expected_points_gw")) for c in gw_cols]
 name = table["web_name"].to_dict()
 next_gw = rec.next_gw or setup.planning_gw
 opp = engine.next_opponents(setup.fixtures, setup.teams, next_gw)
+league = setup.league
+if league is not None:
+    from fpl_agent.league import head_to_head, league_ownership
+    _own = league_ownership(league)
+    lg_n, lg_own = _own.attrs.get("n", 0), _own.set_index("player_id")
+else:
+    lg_n, lg_own = 0, pd.DataFrame(columns=["owners", "captains", "own_pct", "eo_pct"])
+lg_eo = lg_own["eo_pct"].to_dict() if not lg_own.empty else {}
+
+if len(setup.leagues) > 1:
+    ids = [lg["id"] for lg in setup.leagues]
+    cur = setup.league.league_id if setup.league else ids[0]
+    chosen = st.sidebar.selectbox("Mini-league", ids, index=ids.index(cur) if cur in ids else 0,
+                                  format_func={lg["id"]: lg["name"] for lg in setup.leagues}.get)
+    if setup.league is None or chosen != setup.league.league_id:
+        with st.spinner("Loading league…"):
+            engine.load_league(setup, chosen)
 
 st.sidebar.divider()
 st.sidebar.caption(f"Data: {'live' if setup.synced else 'memory snapshot (API down)'} · "
@@ -148,8 +165,8 @@ for note in setup.notes + setup.state.notes:
 for n in mem.get("notes", []):
     st.caption(f"📝 {n['text']}")
 
-tab_plan, tab_team, tab_players, tab_fix, tab_mem, tab_model = st.tabs(
-    ["Suggestions", "My team", "Players", "Fixtures", "Memory", "Model check"])
+tab_plan, tab_league, tab_team, tab_players, tab_fix, tab_mem, tab_model = st.tabs(
+    ["Suggestions", "League", "My team", "Players", "Fixtures", "Memory", "Model check"])
 
 
 def player_rows(ids: list[int], captain: int | None = None, vice: int | None = None) -> pd.DataFrame:
@@ -206,6 +223,23 @@ with tab_plan:
             f"ΔxPts GW{next_gw}": st.column_config.NumberColumn(format="%+.1f"),
             f"ΔxPts {len(gws)}GW": st.column_config.NumberColumn(format="%+.1f"),
         })
+        close = [(t, a) for t in rec.transfers for a in t.alternatives]
+        if close:
+            st.markdown("**Close calls:** near-equal options the model would also accept")
+            st.dataframe(pd.DataFrame([{
+                "Instead of": t.buy_name, "Option": a["name"], "Price": a["price"],
+                "Δ price": a["price"] - t.buy_price, f"Δ xPts {len(gws)}GW": a["delta"],
+                "Option league EO": lg_eo.get(a["id"], 0.0), "Pick league EO": lg_eo.get(t.buy_id, 0.0),
+            } for t, a in close]), hide_index=True, width="stretch", column_config={
+                "Price": st.column_config.NumberColumn(format="£%.1fm"),
+                "Δ price": st.column_config.NumberColumn(format="%+.1f"),
+                f"Δ xPts {len(gws)}GW": st.column_config.NumberColumn(format="%+.1f"),
+                "Option league EO": st.column_config.NumberColumn(format="%.0f%%"),
+                "Pick league EO": st.column_config.NumberColumn(format="%.0f%%"),
+            })
+            st.caption("Within about 1 xPt over the horizon and affordable with the money left. "
+                       "League EO = effective ownership among your mini-league rivals (captain counts "
+                       "double). When it's this close, lower league EO is a differential; higher is cover.")
     else:
         st.success("No transfer clears the bar this week. Bank the free transfer.")
 
@@ -238,6 +272,96 @@ with tab_plan:
 
     with st.expander("Rationale"):
         st.text(rec.rationale)
+
+
+# -- League -------------------------------------------------------------------
+
+with tab_league:
+    if league is None:
+        st.info("No mini-league loaded. Join a private league, or set FPL_LEAGUE_ID in .env, "
+                "then Refresh from FPL.")
+    else:
+        me = league.mine
+        st.subheader(f"{league.name} · after GW{league.gw}")
+        if league.partial:
+            st.caption(f"Large league: showing the top {len(league.rivals)} managers (plus you).")
+        st.dataframe(pd.DataFrame([{
+            "Rank": r.rank, "Team": ("➜ " if r.entry == league.me else "") + r.team_name,
+            "Manager": r.manager_name, "Total": r.total, f"GW{league.gw}": r.gw_points,
+            "Gap to you": (r.total - me.total) if me else None,
+            "Captain": name.get(r.captain, "—"), "Chip this GW": r.active_chip or "",
+            "Chips left now": ", ".join(r.chips_now) or "none",
+            "Bank": r.bank / 10, "Value": r.value / 10,
+        } for r in league.rivals]), hide_index=True, width="stretch", column_config={
+            "Gap to you": st.column_config.NumberColumn(format="%+d"),
+            "Bank": st.column_config.NumberColumn(format="£%.1fm"),
+            "Value": st.column_config.NumberColumn(format="£%.1fm"),
+        })
+
+        others = [r for r in league.rivals if r.entry != league.me]
+        if me and others:
+            by_entry = {r.entry: r for r in others}
+            entries = list(by_entry)
+            target = league.target.entry if league.target else entries[0]
+            rival = by_entry[st.selectbox(
+                "Compare with", entries, index=entries.index(target),
+                format_func=lambda e: f"{by_entry[e].rank}. {by_entry[e].team_name} "
+                                      f"({by_entry[e].total - me.total:+d})")]
+            h = head_to_head(league, rival.entry, plan.forecast, setup.players, setup.state.squad, gws)
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Gap", f"{-h.gap:+d} pts", help="Your total minus theirs")
+            m2.metric(f"Your edge per GW (next {len(gws)})", f"{h.edge_per_gw:+.1f} xPts",
+                      help="Both current squads held, best XI and captain each week")
+            m3.metric("Weekly swing", f"±{h.weekly_sd:.0f} pts",
+                      help="Spread of your weekly score difference so far this season")
+            m4.metric("Rough chance to finish above", f"{h.p_ahead:.0%}",
+                      help=f"Current gap + your edge over the horizon, against the weekly swing over "
+                           f"{h.remaining} GWs left. Ignores future transfers and chips.")
+            st.caption(f"You share {len(h.shared)} of 15 players. Only the other "
+                       f"{len(h.mine_only)} on each side move the gap.")
+
+            def diff_rows(ids):
+                return pd.DataFrame([{
+                    "Player": name.get(p), "Pos": table.loc[p, "pos"], "Team": table.loc[p, "team"],
+                    f"xPts GW{next_gw}": table.loc[p, "expected_points_next"],
+                    f"xPts {len(gws)}GW": table.loc[p, "total_expected_points"],
+                    "League EO": lg_eo.get(p, 0.0),
+                } for p in ids]).sort_values(f"xPts {len(gws)}GW", ascending=False)
+
+            cfg = {f"xPts GW{next_gw}": st.column_config.NumberColumn(format="%.1f"),
+                   f"xPts {len(gws)}GW": st.column_config.NumberColumn(format="%.1f"),
+                   "League EO": st.column_config.NumberColumn(format="%.0f%%")}
+            a, b = st.columns(2)
+            with a:
+                st.markdown("**Only you have**")
+                st.dataframe(diff_rows(h.mine_only), hide_index=True, width="stretch", column_config=cfg)
+            with b:
+                st.markdown(f"**Only {rival.team_name} has**")
+                st.dataframe(diff_rows(h.theirs_only), hide_index=True, width="stretch", column_config=cfg)
+
+            st.markdown("**Gameweek by gameweek (both squads held)**")
+            st.dataframe(h.by_gw.assign(
+                your_captain=h.by_gw["your_captain"].map(name), their_captain=h.by_gw["their_captain"].map(name),
+            ).rename(columns={"gw": "GW", "you": "You xPts", "them": "Them xPts", "edge": "Edge",
+                              "your_captain": "Your captain", "their_captain": "Their captain"}),
+                hide_index=True, width="stretch", column_config={
+                    c: st.column_config.NumberColumn(format="%.1f") for c in ("You xPts", "Them xPts")}
+                | {"Edge": st.column_config.NumberColumn(format="%+.1f")})
+            st.caption("Same captain = that pick cancels out. A different captain is where weeks swing. "
+                       f"Rival squads are as of the GW{league.gw} deadline.")
+
+        st.markdown("**Who the league owns**")
+        n = lg_n
+        st.dataframe(pd.DataFrame([{
+            "Player": name.get(pid), "Pos": table.loc[pid, "pos"] if pid in table.index else "",
+            "Owners": f"{int(r.owners)}/{n}", "Captains": int(r.captains), "League EO": r.eo_pct,
+            "Overall own": float(table.loc[pid, "selected_by_percent"]) if pid in table.index else None,
+            "You": "✓" if pid in setup.state.squad else "",
+        } for pid, r in lg_own.head(25).iterrows()]), hide_index=True, width="stretch", column_config={
+            "League EO": st.column_config.NumberColumn(format="%.0f%%"),
+            "Overall own": st.column_config.NumberColumn(format="%.1f%%"),
+        })
+        st.caption("Rivals only (you excluded). Effective ownership counts captains twice and benched players zero.")
 
 
 # -- My team ------------------------------------------------------------------
@@ -316,11 +440,14 @@ with tab_players:
         "Mine": view["owned"], "Player": view["web_name"], "Team": view["team"], "Pos": view["pos"],
         "Price": view["price"], "Own%": view["selected_by_percent"],
         "xMins": view["exp_minutes"], "xG/90": view["xg90"], "xA/90": view["xa90"],
+        "Team xG%": view["xg_share"] * 100,
+        "Finishing": view["finish90"],
         "DC%": (view["dc_rate"] * 100).where(view["pos"] != "GK"),
         "CS%": view["cs_next"] * 100,
         **{f"GW{g}": view[f"expected_points_gw{g}"] for g in gws},
         f"xPts {len(gws)}GW": view["total_expected_points"],
         "xPts/£m": view["total_expected_points"] / view["price"],
+        "League EO": view["id"].map(lambda i: lg_eo.get(i, 0.0)) if league is not None else None,
         "News": view["news"].fillna(""),
     }).sort_values(f"xPts {len(gws)}GW", ascending=False)
 
@@ -330,6 +457,12 @@ with tab_players:
         "Price": st.column_config.NumberColumn(format="£%.1fm"),
         "Own%": st.column_config.NumberColumn(format="%.1f%%"),
         "xPts/£m": st.column_config.NumberColumn(format="%.2f"),
+        "Team xG%": st.column_config.NumberColumn(
+            format="%.0f%%", help="Share of his team's xG while he's on the pitch (his role)"),
+        "Finishing": st.column_config.NumberColumn(
+            format="%+.2f", help="Recent goals − xG per 90 (shrunk). 15% of it is carried into the forecast"),
+        "League EO": st.column_config.NumberColumn(
+            format="%.0f%%", help="Effective ownership among your mini-league rivals (captain counts double)"),
         **{f"GW{g}": st.column_config.NumberColumn(format="%.1f") for g in gws},
     })
 
@@ -464,15 +597,17 @@ matches (70% xG, 30% actual goals, recent games count more, adjusted for who the
 That gives expected goals for and against in every upcoming fixture.
 
 **2. Each player's habits.** From recent matches: how likely he is to play and to play 60+
-minutes, his xG and xA per 90, how often he earns defensive-contribution points, plus
-saves, bonus and cards. Players with few minutes are pulled toward their position's
-average, so one lucky cameo doesn't make a star.
+minutes, his **share of his team's xG and xA** while on the pitch (his role), how often he
+earns defensive-contribution points, plus saves, bonus and cards. Players with few minutes
+are pulled toward their position's average, so one lucky cameo doesn't make a star. 15% of
+his recent finishing above or below xG is carried forward; the rest is treated as luck.
 
-**3. Points per fixture.** Habits × fixture: xG/90 scaled by the minutes he'll play and how
-leaky the opponent is, times the points a goal is worth for his position; the same for
-assists; clean-sheet and goals-conceded odds from the goals his team is expected to
-concede; and so on for every scoring rule. Injury flags cut the next gameweek and fade
-over four. Blanks score 0 and doubles add up.
+**3. Points per fixture.** Role share × the goals his team is expected to score in that
+fixture × the minutes he'll play, times the points a goal is worth for his position; the
+same for assists. Clean-sheet and goals-conceded odds come from the goals his team is
+expected to concede, allowing for uncertainty in that estimate; and so on for every
+scoring rule. Injury flags cut the next gameweek and fade over four. Blanks score 0 and
+doubles add up.
 
 **4. The plan.** An optimiser picks the squad, XI and captain for every gameweek in the
 horizon to maximise those points, within budget, formation and 3-per-club rules. A

@@ -89,8 +89,8 @@ def refresh(ctx: click.Context, top_n: int) -> None:
 # -- plan ---------------------------------------------------------------------
 
 _plan_options = [
-    click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int, required=True,
-                 help="FPL manager ID."),
+    click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int,
+                 default=engine.DEFAULT_MANAGER_ID, show_default=True, help="FPL manager ID."),
     click.option("--refresh-token", envvar="FPL_REFRESH_TOKEN", default=None,
                  help="FPL login token copied from your browser (see README)."),
     click.option("--horizon", envvar="FPL_HORIZON", type=click.IntRange(1, 8), default=6,
@@ -226,11 +226,85 @@ def _print_recommendation(plan: Plan) -> None:
     console.print(Panel(rec.rationale, title="Rationale", border_style="blue"))
 
 
+# -- league -------------------------------------------------------------------
+
+SHORT_CHIP = {"Triple Captain": "TC", "Bench Boost": "BB", "Free Hit": "FH", "Wildcard": "WC"}
+
+
+@cli.command()
+@plan_options
+@click.option("--league-id", envvar="FPL_LEAGUE_ID", type=int, default=None,
+              help="Classic league id (default: your first private league).")
+@click.option("--rival", default=None, help="Rival team name to compare with (default: leader, "
+                                             "or the closest chaser if you lead).")
+@click.pass_context
+def league(ctx: click.Context, league_id: int | None, rival: str | None, **kwargs) -> None:
+    """Mini-league standings, rivals' chips and captains, and you vs a rival."""
+    from fpl_agent.league import head_to_head, league_ownership
+
+    setup = sync_setup(ctx.obj["db"], ctx.obj["memory"], kwargs.pop("manager_id"),
+                       kwargs.pop("refresh_token"))
+    if league_id and (setup.league is None or setup.league.league_id != league_id):
+        engine.load_league(setup, league_id)
+    lg = setup.league
+    if lg is None or lg.mine is None:
+        raise click.ClickException("No mini-league loaded. " + " ".join(setup.notes))
+    with console.status("Optimising…"):
+        plan = engine.plan_from_setup(setup, PlanOptions(**kwargs), record=False)
+    name = dict(zip(setup.players["id"], setup.players["web_name"]))
+    me = lg.mine
+
+    t = Table(title=f"{lg.name} · after GW{lg.gw}")
+    for col in ("#", "Team", "Total", f"GW{lg.gw}", "Gap", "Captain", "Chip", "Chips left now"):
+        t.add_column(col, justify="right" if col in ("#", "Total", f"GW{lg.gw}", "Gap") else "left")
+    for r in lg.rivals:
+        style = "bold" if r.entry == lg.me else ""
+        t.add_row(str(r.rank), r.team_name, str(r.total), str(r.gw_points), f"{r.total - me.total:+d}",
+                  name.get(r.captain, "—"), r.active_chip or "",
+                  " ".join(SHORT_CHIP.get(c, c) for c in r.chips_now) or "none",
+                  style=style)
+    console.print(t)
+
+    others = [r for r in lg.rivals if r.entry != lg.me]
+    target = lg.target
+    if rival:
+        hits = [r for r in others if rival.lower() in r.team_name.lower()]
+        if not hits:
+            raise click.ClickException(f"No rival matches '{rival}'.")
+        target = hits[0]
+    if target is None:
+        return
+    fc = plan.forecast.set_index("player_id")
+    h = head_to_head(lg, target.entry, plan.forecast, setup.players, setup.state.squad, plan.result.gameweeks)
+    eo = league_ownership(lg).set_index("player_id")["eo_pct"].to_dict()
+
+    def fmt(ids):
+        ids = sorted(ids, key=lambda p: -fc.at[p, "total_expected_points"] if p in fc.index else 0)
+        return "\n".join(f"{name.get(p)}  {fc.at[p, 'total_expected_points']:.1f} xPts · "
+                         f"league EO {eo.get(p, 0):.0f}%" for p in ids if p in fc.index)
+
+    console.print(Panel(
+        f"Gap: [bold]{-h.gap:+d}[/] · your edge {h.edge_per_gw:+.1f} xPts/GW over the next "
+        f"{len(h.by_gw)} (both squads held) · weekly swing ±{h.weekly_sd:.0f}\n"
+        f"Rough chance to finish above {target.team_name}: [bold]{h.p_ahead:.0%}[/] "
+        f"({h.remaining} GWs left)\n"
+        f"Shared players: {len(h.shared)}/15. Captains: "
+        + ", ".join(f"GW{r.gw} {name.get(r.your_captain)} vs {name.get(r.their_captain)}"
+                    for r in h.by_gw.itertuples()),
+        title=f"You vs {target.team_name}", border_style="cyan"))
+    d = Table(show_header=True)
+    d.add_column("Only you have", style="green")
+    d.add_column(f"Only {target.team_name} has", style="red")
+    d.add_row(fmt(h.mine_only), fmt(h.theirs_only))
+    console.print(d)
+
+
 # -- status & memory ----------------------------------------------------------
 
 @cli.command()
 @click.option("--sync", is_flag=True, help="Refresh from the FPL API before showing.")
-@click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int, default=None)
+@click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int,
+              default=engine.DEFAULT_MANAGER_ID, show_default=True)
 @click.option("--refresh-token", envvar="FPL_REFRESH_TOKEN", default=None)
 @click.pass_context
 def status(ctx: click.Context, sync: bool, manager_id: int | None,

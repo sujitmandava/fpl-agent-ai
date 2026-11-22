@@ -9,6 +9,11 @@ import pandas as pd
 from fpl_agent.optimizer.milp import OptimizationResult
 
 POSITION_MAP = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+# A buy is a "close call" when another player at the same position is within
+# this many horizon xPts (or 5% of the buy's total, whichever is larger).
+CLOSE_MARGIN = 1.0
+CLOSE_MAX_EXTRA_COST = 10       # without a known bank, alternatives may cost up to £1.0m more
+CAPTAIN_CLOSE = 0.3             # next-GW xPts gap for a close captaincy call
 
 
 @dataclass
@@ -23,6 +28,9 @@ class Transfer:
     position: str = ""
     ep_gain_next: float = 0.0
     ep_gain_horizon: float = 0.0
+    # Near-equal options: [{"id", "name", "price", "xpts", "delta"}], delta =
+    # their horizon xPts − the buy's. Empty when the pick is clear.
+    alternatives: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -53,6 +61,7 @@ def build_recommendation(
     baseline: OptimizationResult | None = None,
     fixtures: pd.DataFrame | None = None,
     teams: pd.DataFrame | None = None,
+    bank: int | None = None,
 ) -> Recommendation:
     """Transform raw optimizer output into a structured recommendation.
 
@@ -65,6 +74,9 @@ def build_recommendation(
         expected-points delta. Without it the delta is reported as 0.
     fixtures, teams : DataFrame, optional
         Used to list upcoming opponents in the rationale.
+    bank : int, optional
+        Bank before transfers (×10). Close-call alternatives are limited to
+        what the money left after the plan's transfers could buy.
     """
     pid_to_name = dict(zip(players["id"], players["web_name"]))
     pid_to_pos = dict(zip(players["id"], players["element_type"]))
@@ -78,10 +90,21 @@ def build_recommendation(
         opt_result.transfers_out, opt_result.transfers_in,
         pid_to_name, pid_to_pos, pid_to_cost, pid_to_ep, pid_to_next, selling_prices,
     )
+    if bank is not None:
+        left = bank + sum(selling_prices.get(p, pid_to_cost.get(p, 0)) for p in opt_result.transfers_out) \
+            - sum(pid_to_cost.get(p, 0) for p in opt_result.transfers_in)
+        extra = max(int(left), 0)
+    else:
+        extra = CLOSE_MAX_EXTRA_COST
+    for t in transfers:
+        if t.buy_id:
+            t.alternatives = close_alternatives(t.buy_id, set(opt_result.selected_ids),
+                                                pid_to_name, pid_to_pos, pid_to_cost, pid_to_ep,
+                                                max_extra_cost=extra)
 
     # -- Lineup ---------------------------------------------------------------
     squad = opt_result.selected_ids
-    starting_xi = opt_result.starting_xi or _fallback_xi(squad, pid_to_pos, pid_to_next)
+    starting_xi = opt_result.starting_xi or best_xi(squad, pid_to_pos, pid_to_next)
     starting_xi = sorted(starting_xi, key=lambda p: (pid_to_pos.get(p, 0), -pid_to_next.get(p, 0)))
     bench = [p for p in squad if p not in set(starting_xi)]
     bench_gk = [p for p in bench if pid_to_pos.get(p) == 1]
@@ -144,8 +167,33 @@ def build_recommendation(
 
 # -- Helpers ------------------------------------------------------------------
 
-def _fallback_xi(squad: list[int], pid_to_pos: dict, pid_to_next: dict) -> list[int]:
-    """Best valid XI by next-GW EP (used only if the optimizer gave no lineup)."""
+def close_alternatives(
+    buy_id: int, squad: set[int], pid_to_name: dict, pid_to_pos: dict,
+    pid_to_cost: dict, pid_to_ep: dict, limit: int = 3, max_extra_cost: int = CLOSE_MAX_EXTRA_COST,
+) -> list[dict]:
+    """Affordable players at the buy's position whose horizon xPts are within the close margin.
+
+    *max_extra_cost* (×10) is how much more than the buy they may cost.
+    Ignores the 3-per-club rule, so an alternative may need other changes.
+    """
+    buy_ep, pos = pid_to_ep.get(buy_id, 0.0), pid_to_pos.get(buy_id)
+    margin = max(CLOSE_MARGIN, 0.05 * buy_ep)
+    max_cost = pid_to_cost.get(buy_id, 0) + max_extra_cost
+    alts = [
+        {"id": int(pid), "name": pid_to_name.get(pid, str(pid)), "price": pid_to_cost.get(pid, 0) / 10,
+         "xpts": round(ep, 2), "delta": round(ep - buy_ep, 2)}
+        for pid, ep in pid_to_ep.items()
+        if pid != buy_id and pid not in squad and pid_to_pos.get(pid) == pos
+        and abs(ep - buy_ep) <= margin and pid_to_cost.get(pid, 0) <= max_cost
+    ]
+    return sorted(alts, key=lambda a: -a["xpts"])[:limit]
+
+
+def best_xi(squad: list[int], pid_to_pos: dict, pid_to_next: dict) -> list[int]:
+    """Best valid XI by xPts (1 GK, at least 3 DEF / 2 MID / 1 FWD).
+
+    Used when the optimizer gave no lineup, and for rivals' held squads.
+    """
     by_pos: dict[int, list[int]] = {}
     for p in sorted(squad, key=lambda p: pid_to_next.get(p, 0), reverse=True):
         by_pos.setdefault(pid_to_pos.get(p, 0), []).append(p)
@@ -257,6 +305,10 @@ def _generate_rationale(
                 f"  [{t.position}] {t.sell_name} → {t.buy_name}: "
                 f"{t.ep_gain_next:+.1f} / {t.ep_gain_horizon:+.1f}  ({fx(t.buy_id) if t.buy_id else ''})"
             )
+            for a in t.alternatives:
+                cost = a["price"] - t.buy_price
+                lines.append(f"      close call: {a['name']} {a['delta']:+.1f} xPts, "
+                             f"{'+' if cost >= 0 else '-'}£{abs(cost):.1f}m")
         if opt_result.transfer_cost:
             lines.append(f"  Hits: -{opt_result.transfer_cost} pts")
     else:
@@ -271,6 +323,9 @@ def _generate_rationale(
         f"Vice:    {pid_to_name.get(vice_captain_id, vice_captain_id)} "
         f"({pid_to_next.get(vice_captain_id, 0):.1f} EP)"
     )
+    gap = pid_to_next.get(captain_id, 0) - pid_to_next.get(vice_captain_id, 0)
+    if gap < CAPTAIN_CLOSE:
+        lines.append(f"  Close call: captain and vice are {gap:.1f} xPts apart; either is defensible.")
     lines.append("")
     lines.append(f"Projected {gw_label} (XI + captain): {opt_result.next_gw_points:.1f}")
     lines.append(f"Change vs. no transfers, {gw_label}: {delta:+.1f} (after hits)")
@@ -279,7 +334,8 @@ def _generate_rationale(
         lines.append(f"Change vs. no transfers, next {n} GWs: {horizon_delta:+.1f} (after hits)")
     lines.append("")
     lines.append(
-        "xPts model: minutes, xG/xA per 90, defensive contributions, saves, bonus and "
-        "opponent-adjusted team strength. Check team news before the deadline."
+        "xPts model: minutes, share of team chances, a little finishing form, defensive "
+        "contributions, saves, bonus and opponent-adjusted team strength. "
+        "Check team news before the deadline."
     )
     return "\n".join(lines)

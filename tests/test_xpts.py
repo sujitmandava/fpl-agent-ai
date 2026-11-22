@@ -11,6 +11,8 @@ from fpl_agent.forecast.expected_points import (
     DEFAULT_SCORING,
     ExpectedPointsModel,
     defensive_points_earned,
+    nb_floor_div,
+    p_zero,
     poisson_floor_div,
 )
 from fpl_agent.forecast.team_ratings import fit_team_ratings
@@ -101,6 +103,15 @@ def test_poisson_floor_div():
     assert poisson_floor_div(10, 2) == pytest.approx(10 / 2 - 0.25, abs=0.05)
 
 
+def test_negative_binomial_goals_against():
+    # Very large k converges to Poisson.
+    assert p_zero(1.2, k=1e9) == pytest.approx(math.exp(-1.2), rel=1e-6)
+    assert nb_floor_div(1.2, 2, k=1e9) == pytest.approx(poisson_floor_div(1.2, 2), rel=1e-4)
+    # Uncertainty about the rate makes a clean sheet more likely than Poisson says.
+    assert p_zero(1.2, k=4) > math.exp(-1.2)
+    assert p_zero(0) == 1.0 and nb_floor_div(0, 2) == 0.0
+
+
 def test_defensive_contribution_points_isolated():
     players, history, _, _ = build_world()
     positions = dict(zip(players["id"], players["element_type"]))
@@ -165,6 +176,37 @@ def test_predict_outputs_explanations():
     players, history, fixtures, teams = build_world()
     fixtures = _future(fixtures, [{"id": 500, "event": 9, "team_h": 10, "team_a": 20}])
     fc = ExpectedPointsModel(players, history, fixtures, teams, 8, 1).predict()
-    for col in ("exp_minutes", "xg90", "xa90", "dc_rate", "cs_next", "xgi_next"):
+    for col in ("exp_minutes", "xg90", "xa90", "xg_share", "xa_share", "finish90",
+                "dc_rate", "cs_next", "xgi_next"):
         assert col in fc.columns
     assert math.isclose(fc.set_index("player_id").loc[4, "xg90"], 0.0, abs_tol=0.05)
+
+
+def test_role_share_and_finishing_form():
+    players, history, fixtures, teams = build_world()
+    prof = ExpectedPointsModel(players, history, fixtures, teams, 8, 1).player_profiles()
+    # Player 1 creates 0.5 of team 10's 0.6 xG per match (with player 3); shrinkage
+    # keeps the share below that but well above the defender's.
+    assert 0.5 < prof[1]["xg_share"] < 0.84
+    assert prof[1]["xg_share"] > prof[3]["xg_share"]
+    # Player 1 scores a goal every other match from 0.5 xG: finishing above xG,
+    # but shrunk, so the carried-over amount is small.
+    assert 0 < prof[1]["finish90"] < 0.5
+    assert prof[2]["finish90"] < 0      # never scores from 0.3 xG/match
+
+
+def test_finishing_form_moves_forecast_a_little():
+    import fpl_agent.forecast.expected_points as ep
+
+    players, history, fixtures, teams = build_world()
+    fixtures = _future(fixtures, [{"id": 500, "event": 9, "team_h": 10, "team_a": 20}])
+    model = ExpectedPointsModel(players, history, fixtures, teams, 8, 1)
+    prof = model.player_profiles()[1]
+    with_form, _, _ = model._fixture_points(prof, 3, 10, 20, True)
+    old = ep.FINISH_WEIGHT
+    try:
+        ep.FINISH_WEIGHT = 0.0
+        without, _, _ = model._fixture_points(prof, 3, 10, 20, True)
+    finally:
+        ep.FINISH_WEIGHT = old
+    assert 0 < with_form - without < 0.5

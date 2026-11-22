@@ -13,6 +13,7 @@ override, then the API value.
 
 from __future__ import annotations
 
+import os
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -24,6 +25,7 @@ from fpl_agent.data_ingest.manager import ManagerState, chip_status
 from fpl_agent.data_ingest.models import get_meta
 from fpl_agent.forecast import ExpectedPointsModel
 from fpl_agent.forecast.team_ratings import TeamRatings
+from fpl_agent.league import LeagueSnapshot, fetch_league
 from fpl_agent.memory import AgentMemory
 from fpl_agent.optimizer import optimize
 from fpl_agent.optimizer.milp import OptimizationError, OptimizationResult, TeamState
@@ -32,6 +34,12 @@ from fpl_agent.planner.chips import chip_outlook, fixture_calendar
 from fpl_agent.planner.recommend import Recommendation
 
 POS = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+# Your FPL team ID; FPL_MANAGER_ID or --manager-id override it.
+DEFAULT_MANAGER_ID = 7588693
+
+
+def manager_id_from_env() -> int:
+    return int(os.environ.get("FPL_MANAGER_ID") or DEFAULT_MANAGER_ID)
 
 
 class EngineError(Exception):
@@ -55,6 +63,13 @@ class Setup:
     max_ft: int
     synced: bool
     notes: list[str] = field(default_factory=list)
+    chip_defs: list[dict] = field(default_factory=list)
+    league: LeagueSnapshot | None = None
+
+    @property
+    def leagues(self) -> list[dict]:
+        """Your private classic leagues: [{"id", "name", "rank"}]."""
+        return self.memory.data.get("manager", {}).get("leagues", [])
 
     @property
     def planning_gw(self) -> int:
@@ -113,14 +128,39 @@ def sync_setup(db: str, memory_path: str, manager_id: int,
             memory.prune_overrides(current_gw + 1)
         memory.save()
 
-        return Setup(
+        setup = Setup(
             state=state, memory=memory, players=players,
             history=store.player_history_df(), fixtures=store.fixtures_df(), teams=teams,
             scoring=store.scoring_rules(), current_gw=current_gw, chips=chips,
             max_ft=store.max_free_transfers(), synced=synced, notes=notes,
+            chip_defs=store.chip_definitions(),
         )
+        if synced:
+            load_league(setup, client=client)
+        return setup
     finally:
         store.close()
+
+
+def load_league(setup: Setup, league_id: int | None = None, client: FPLClient | None = None,
+                max_rivals: int = 10) -> LeagueSnapshot | None:
+    """Fetch a mini-league into ``setup.league``; failures become a note.
+
+    League choice: *league_id*, else ``FPL_LEAGUE_ID``, else your first
+    private league.
+    """
+    if league_id is None:
+        env = os.environ.get("FPL_LEAGUE_ID")
+        league_id = int(env) if env else (setup.leagues[0]["id"] if setup.leagues else None)
+    if not league_id:
+        return None
+    try:
+        setup.league = fetch_league(client or FPLClient(), int(league_id), setup.current_gw,
+                                    me=int(setup.memory.data["manager"]["id"]),
+                                    chip_defs=setup.chip_defs, max_rivals=max_rivals)
+    except Exception as exc:
+        setup.notes.append(f"Couldn't load mini-league {league_id}: {exc.__class__.__name__}")
+    return setup.league
 
 
 # -- Planning -----------------------------------------------------------------
@@ -205,7 +245,8 @@ def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Pla
         raise EngineError(f"Optimiser failed: {exc}") from exc
 
     rec = build_recommendation(result, setup.players, forecast, state.squad, state.selling_prices,
-                               baseline=baseline, fixtures=setup.fixtures, teams=setup.teams)
+                               baseline=baseline, fixtures=setup.fixtures, teams=setup.teams,
+                               bank=team_state.bank)
     gws = (result.gameweeks if not opts.free_hit
            else list(range(setup.planning_gw, setup.planning_gw + opts.horizon)))
     advice = chip_outlook(result if not opts.free_hit else baseline, setup.chips,
