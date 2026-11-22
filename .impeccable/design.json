@@ -1,0 +1,643 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-22T21:52:26.316628+00:00",
+  "title": "Design System: FPL Agent",
+  "extensions": {
+    "colorMeta": {
+      "wall": {
+        "role": "neutral",
+        "displayName": "Dressing-Room Wall",
+        "tonalRamp": [
+          "#2a2e33",
+          "#454b52",
+          "#646b73",
+          "#878e96",
+          "#a9afb6",
+          "#c9cdd2",
+          "#e6e8eb",
+          "#f4f5f6"
+        ]
+      },
+      "wall-deep": {
+        "role": "neutral",
+        "displayName": "Wall in Shadow",
+        "tonalRamp": [
+          "#272b30",
+          "#41474e",
+          "#5f666e",
+          "#7f868e",
+          "#a0a7af",
+          "#c0c6cc",
+          "#d9dde2",
+          "#eef0f2"
+        ]
+      },
+      "board": {
+        "role": "neutral",
+        "displayName": "White Melamine",
+        "tonalRamp": [
+          "#2b2d30",
+          "#46494d",
+          "#666a6f",
+          "#888c92",
+          "#abaeb3",
+          "#cdd0d4",
+          "#e8eaed",
+          "#f7f8fa"
+        ]
+      },
+      "board-line": {
+        "role": "neutral",
+        "displayName": "Pitch Marking Grey",
+        "tonalRamp": [
+          "#262a2f",
+          "#3f454c",
+          "#5c636b",
+          "#7b838c",
+          "#9ca3ab",
+          "#bcc2c9",
+          "#cfd4db",
+          "#eceef1"
+        ]
+      },
+      "frame": {
+        "role": "neutral",
+        "displayName": "Brushed Aluminium",
+        "tonalRamp": [
+          "#24272b",
+          "#3c4146",
+          "#575d64",
+          "#747b83",
+          "#a3aab3",
+          "#bcc1c8",
+          "#d5d9de",
+          "#eef0f2"
+        ]
+      },
+      "frame-light": {
+        "role": "neutral",
+        "displayName": "Aluminium Highlight",
+        "tonalRamp": [
+          "#25282c",
+          "#3e4348",
+          "#5a6067",
+          "#788088",
+          "#9aa1a9",
+          "#c6ccd3",
+          "#dde1e5",
+          "#f1f3f5"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Marker Black",
+        "tonalRamp": [
+          "#15181c",
+          "#262b31",
+          "#3a4048",
+          "#4a525c",
+          "#6b737d",
+          "#959ca5",
+          "#c3c8ce",
+          "#eceef0"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Slate Ink",
+        "tonalRamp": [
+          "#15181c",
+          "#262b31",
+          "#3a4048",
+          "#4a525c",
+          "#6b737d",
+          "#959ca5",
+          "#c3c8ce",
+          "#eceef0"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Label Grey",
+        "tonalRamp": [
+          "#15181c",
+          "#262b31",
+          "#3a4048",
+          "#4a525c",
+          "#6b737d",
+          "#959ca5",
+          "#c3c8ce",
+          "#eceef0"
+        ]
+      },
+      "magnet-blue": {
+        "role": "primary",
+        "displayName": "Magnet Blue",
+        "tonalRamp": [
+          "#0f1f5c",
+          "#1739a8",
+          "#1d4ed8",
+          "#3566e8",
+          "#6489ef",
+          "#97b0f5",
+          "#c6d4fa",
+          "#eaf0fe"
+        ]
+      },
+      "magnet-blue-deep": {
+        "role": "primary",
+        "displayName": "Magnet Blue, Shaded Edge",
+        "tonalRamp": [
+          "#0f1f5c",
+          "#1739a8",
+          "#1d4ed8",
+          "#3566e8",
+          "#6489ef",
+          "#97b0f5",
+          "#c6d4fa",
+          "#eaf0fe"
+        ]
+      },
+      "marker-red": {
+        "role": "secondary",
+        "displayName": "Marker Red",
+        "tonalRamp": [
+          "#4f0b0b",
+          "#7f1212",
+          "#9f1414",
+          "#c81e1e",
+          "#e04545",
+          "#ec8585",
+          "#f6c2c2",
+          "#fbe4e4"
+        ]
+      },
+      "red-soft": {
+        "role": "secondary",
+        "displayName": "Wiped Red",
+        "tonalRamp": [
+          "#4f0b0b",
+          "#7f1212",
+          "#9f1414",
+          "#c81e1e",
+          "#e04545",
+          "#ec8585",
+          "#f6c2c2",
+          "#fbe4e4"
+        ]
+      },
+      "armband-yellow": {
+        "role": "tertiary",
+        "displayName": "Armband Yellow",
+        "tonalRamp": [
+          "#4d3f00",
+          "#806a00",
+          "#b39400",
+          "#e6be00",
+          "#ffd400",
+          "#ffe14d",
+          "#ffed99",
+          "#fff8d6"
+        ]
+      },
+      "doubt-amber": {
+        "role": "tertiary",
+        "displayName": "Doubt Amber",
+        "tonalRamp": [
+          "#3d1c03",
+          "#6b3a07",
+          "#8f4708",
+          "#b45309",
+          "#d9772b",
+          "#eba468",
+          "#f6cfa6",
+          "#fdf1df"
+        ]
+      },
+      "notice-wash": {
+        "role": "tertiary",
+        "displayName": "Notice Wash",
+        "tonalRamp": [
+          "#3d1c03",
+          "#6b3a07",
+          "#8f4708",
+          "#b45309",
+          "#d9772b",
+          "#eba468",
+          "#f6cfa6",
+          "#fdf1df"
+        ]
+      },
+      "notice-ink": {
+        "role": "tertiary",
+        "displayName": "Notice Ink",
+        "tonalRamp": [
+          "#3d1c03",
+          "#6b3a07",
+          "#8f4708",
+          "#b45309",
+          "#d9772b",
+          "#eba468",
+          "#f6cfa6",
+          "#fdf1df"
+        ]
+      },
+      "plate": {
+        "role": "neutral",
+        "displayName": "Reversed Plate",
+        "tonalRamp": [
+          "#15181c",
+          "#262b31",
+          "#3a4048",
+          "#4a525c",
+          "#6b737d",
+          "#959ca5",
+          "#c3c8ce",
+          "#eceef0"
+        ]
+      },
+      "plate-2": {
+        "role": "neutral",
+        "displayName": "Plate Rule",
+        "tonalRamp": [
+          "#15181c",
+          "#262b31",
+          "#3a4048",
+          "#4a525c",
+          "#6b737d",
+          "#959ca5",
+          "#c3c8ce",
+          "#eceef0"
+        ]
+      },
+      "plate-text": {
+        "role": "neutral",
+        "displayName": "Plate Chalk",
+        "tonalRamp": [
+          "#15181c",
+          "#262b31",
+          "#3a4048",
+          "#4a525c",
+          "#6b737d",
+          "#b7bec7",
+          "#dfe2e6",
+          "#f3f4f6"
+        ]
+      },
+      "plate-mute": {
+        "role": "neutral",
+        "displayName": "Plate Proof Grey",
+        "tonalRamp": [
+          "#15181c",
+          "#262b31",
+          "#3a4048",
+          "#4a525c",
+          "#6b737d",
+          "#b7bec7",
+          "#dfe2e6",
+          "#f3f4f6"
+        ]
+      },
+      "field-white": {
+        "role": "neutral",
+        "displayName": "Control White",
+        "tonalRamp": [
+          "#2b2d30",
+          "#46494d",
+          "#666a6f",
+          "#888c92",
+          "#abaeb3",
+          "#cdd0d4",
+          "#eef0f2",
+          "#ffffff"
+        ]
+      },
+      "error-ink": {
+        "role": "secondary",
+        "displayName": "Error Ink",
+        "tonalRamp": [
+          "#4f0b0b",
+          "#7f1212",
+          "#9f1414",
+          "#c81e1e",
+          "#e04545",
+          "#ec8585",
+          "#f6c2c2",
+          "#fbe4e4"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display-figure": {
+        "displayName": "Display Figure",
+        "purpose": "The one stake figure per screen: gap to rival or total points. Condensed, red behind, blue ahead."
+      },
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing promise only, max 15ch."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Landing band claims."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Screen titles, plate head, sheet heads (20px)."
+      },
+      "section-title": {
+        "displayName": "Section Title",
+        "purpose": "Below-fold section heads on the Plan screen."
+      },
+      "gain-figure": {
+        "displayName": "Gain Figure",
+        "purpose": "Per-move gain and captain xPts on the plate, in armband yellow."
+      },
+      "move": {
+        "displayName": "Move",
+        "purpose": "The Out → In line on each plate row; primary button text."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text and table cells; captions at 13px in ink-2."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Landing lede under the promise."
+      },
+      "proof": {
+        "displayName": "Proof",
+        "purpose": "Stat line under each move."
+      },
+      "counter-name": {
+        "displayName": "Counter Name",
+        "purpose": "Player names under magnets, condensed, on a translucent board chip; tab labels at 11px."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase board markings and component labels only (Out lane, Subs, in order). Never an eyebrow above a headline."
+      },
+      "marker": {
+        "displayName": "Marker",
+        "purpose": "Board annotations only, rotated -4 to -6deg. Never the only carrier of a value."
+      }
+    },
+    "shadows": [
+      {
+        "name": "magnet",
+        "value": "0 2px 3px rgb(21 24 28 / 0.28), 0 1px 0 rgb(21 24 28 / 0.18)",
+        "purpose": "A counter at rest on the board."
+      },
+      {
+        "name": "lift",
+        "value": "0 8px 14px rgb(21 24 28 / 0.24), 0 2px 4px rgb(21 24 28 / 0.2)",
+        "purpose": "A counter on hover or when its move is selected."
+      },
+      {
+        "name": "panel",
+        "value": "0 1px 2px rgb(21 24 28 / 0.08), 0 6px 18px rgb(21 24 28 / 0.06)",
+        "purpose": "Plate, subs strip, tables, active rail item."
+      },
+      {
+        "name": "frame",
+        "value": "0 1px 0 rgb(255 255 255 / 0.6) inset, 0 10px 24px rgb(21 24 28 / 0.14), 0 2px 4px rgb(21 24 28 / 0.12)",
+        "purpose": "The aluminium frame hanging on the wall."
+      },
+      {
+        "name": "board-recess",
+        "value": "inset 0 0 0 1px rgb(21 24 28 / 0.06), inset 0 2px 6px rgb(21 24 28 / 0.08)",
+        "purpose": "The melamine set into the frame."
+      },
+      {
+        "name": "sheet",
+        "value": "0 -8px 30px rgb(21 24 28 / 0.18)",
+        "purpose": "Bottom sheet on phones; side sheet uses -8px 0 30px rgb(21 24 28 / 0.16). Backdrop rgb(21 24 28 / 0.42)."
+      },
+      {
+        "name": "primary",
+        "value": "0 1px 2px rgb(21 24 28 / 0.2), 0 6px 14px rgb(29 78 216 / 0.25)",
+        "purpose": "The team ID submit; the only coloured shadow. No hard offset lip."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Standard ease for lifts, sheets, chevrons and the arrow draw."
+      },
+      {
+        "name": "counter-lift",
+        "value": "260ms",
+        "purpose": "Magnet transform and shadow on hover and selection."
+      },
+      {
+        "name": "arrow-draw",
+        "value": "640ms, delay 120ms + 140ms per arrow",
+        "purpose": "Marker strokes drawing in on load and on re-solve (stroke-dashoffset 1 to 0)."
+      },
+      {
+        "name": "sheet-rise",
+        "value": "320ms",
+        "purpose": "Sheet rises 24px (phone) or slides 32px (desktop) from 60% opacity."
+      },
+      {
+        "name": "backdrop-fade",
+        "value": "240ms ease-out",
+        "purpose": "Sheet backdrop."
+      },
+      {
+        "name": "state",
+        "value": "160ms",
+        "purpose": "Plate row hover background, primary button press and colour."
+      },
+      {
+        "name": "dim",
+        "value": "200ms ease",
+        "purpose": "Unselected arrows and gains fade to 28%; chevron rotation."
+      },
+      {
+        "name": "breathe",
+        "value": "1.4s ease-in-out infinite alternate",
+        "purpose": "Loading ghost board and plate, opacity 0.55 to 1."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation and transition durations 0.01ms; arrows render fully drawn",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack-id",
+        "value": "420px (max-width: ID field and submit stack)"
+      },
+      {
+        "name": "work-split",
+        "value": "760px"
+      },
+      {
+        "name": "landing-split",
+        "value": "900px"
+      },
+      {
+        "name": "rail",
+        "value": "960px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Magnet Counters",
+      "kind": "custom",
+      "refersTo": "counter-mine",
+      "description": "Your player (blue), incoming (red) with captain armband and rival-owned disc; tap opens the player sheet.",
+      "html": "<div style=\"display:flex;gap:12px;padding:16px;background:#f7f8fa\"><button class=\"ds-counter ds-mine\"><span class=\"ds-magnet\"><span class=\"ds-xpts\">5.3</span><span class=\"ds-armband\">C</span></span><span class=\"ds-name\">De Cuyper</span></button><button class=\"ds-counter ds-incoming\"><span class=\"ds-magnet\"><span class=\"ds-xpts\">5.2</span><span class=\"ds-shared\">R</span></span><span class=\"ds-name\">N.Jackson</span></button><button class=\"ds-counter ds-mine\"><span class=\"ds-magnet\"><span class=\"ds-xpts\">4.4</span></span><span class=\"ds-name\">Haaland</span></button></div>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-counter{display:inline-flex;flex-direction:column;align-items:center;gap:3px;width:70px;padding:0;border:0;background:none;cursor:pointer;font:inherit} .ds-magnet{position:relative;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;color:#fff;box-shadow:var(--shadow-magnet);transition:transform 260ms var(--ease-out),box-shadow 260ms var(--ease-out)} .ds-magnet::before{content:'';position:absolute;inset:3px 6px auto;height:38%;border-radius:50% 50% 45% 45%;background:linear-gradient(180deg,rgb(255 255 255 / .34),rgb(255 255 255 / 0))} .ds-mine .ds-magnet{background:radial-gradient(circle at 50% 35%,#3566e8,var(--blue) 55%,var(--blue-deep))} .ds-incoming .ds-magnet{background:radial-gradient(circle at 50% 35%,#e04545,var(--red) 55%,#9f1414)} .ds-xpts{position:relative;font-size:16px;font-weight:800;font-stretch:72%} .ds-name{padding:0 4px;border-radius:3px;background:rgb(247 248 250 / .85);font-size:11.5px;font-weight:700;font-stretch:72%;line-height:1.25;white-space:nowrap} .ds-armband,.ds-vice{position:absolute;top:-3px;right:-5px;display:grid;place-items:center;width:17px;height:17px;border-radius:4px;font-size:9.5px;font-weight:800;box-shadow:0 1px 2px rgb(21 24 28 / .35)} .ds-armband{background:var(--yellow);color:var(--ink)} .ds-shared{position:absolute;bottom:-2px;left:-5px;display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-size:9.5px;font-weight:800} .ds-counter:hover .ds-magnet{transform:translateY(-2px);box-shadow:var(--shadow-lift)} .ds-counter:active .ds-magnet{transform:scale(.96)} .ds-counter:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px} .ds-out .ds-magnet{background:transparent;color:var(--red);box-shadow:none;border:2px dashed var(--red)} .ds-out .ds-magnet::before{display:none} .ds-out .ds-name{color:var(--red);text-decoration:line-through;text-decoration-thickness:1.5px} .ds-out:hover .ds-magnet{box-shadow:none;background:var(--red-soft)}"
+    },
+    {
+      "name": "Out-Lane Ghost",
+      "kind": "custom",
+      "refersTo": "counter-out",
+      "description": "Outgoing player: dashed red ring, struck-through name, no gloss or shadow.",
+      "html": "<div style=\"padding:16px;background:#f7f8fa\"><button class=\"ds-counter ds-out\"><span class=\"ds-magnet\"><span class=\"ds-xpts\">2.4</span></span><span class=\"ds-name\">Hall</span></button></div>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-counter{display:inline-flex;flex-direction:column;align-items:center;gap:3px;width:70px;padding:0;border:0;background:none;cursor:pointer;font:inherit} .ds-magnet{position:relative;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;color:#fff;box-shadow:var(--shadow-magnet);transition:transform 260ms var(--ease-out),box-shadow 260ms var(--ease-out)} .ds-magnet::before{content:'';position:absolute;inset:3px 6px auto;height:38%;border-radius:50% 50% 45% 45%;background:linear-gradient(180deg,rgb(255 255 255 / .34),rgb(255 255 255 / 0))} .ds-mine .ds-magnet{background:radial-gradient(circle at 50% 35%,#3566e8,var(--blue) 55%,var(--blue-deep))} .ds-incoming .ds-magnet{background:radial-gradient(circle at 50% 35%,#e04545,var(--red) 55%,#9f1414)} .ds-xpts{position:relative;font-size:16px;font-weight:800;font-stretch:72%} .ds-name{padding:0 4px;border-radius:3px;background:rgb(247 248 250 / .85);font-size:11.5px;font-weight:700;font-stretch:72%;line-height:1.25;white-space:nowrap} .ds-armband,.ds-vice{position:absolute;top:-3px;right:-5px;display:grid;place-items:center;width:17px;height:17px;border-radius:4px;font-size:9.5px;font-weight:800;box-shadow:0 1px 2px rgb(21 24 28 / .35)} .ds-armband{background:var(--yellow);color:var(--ink)} .ds-shared{position:absolute;bottom:-2px;left:-5px;display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-size:9.5px;font-weight:800} .ds-counter:hover .ds-magnet{transform:translateY(-2px);box-shadow:var(--shadow-lift)} .ds-counter:active .ds-magnet{transform:scale(.96)} .ds-counter:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px} .ds-out .ds-magnet{background:transparent;color:var(--red);box-shadow:none;border:2px dashed var(--red)} .ds-out .ds-magnet::before{display:none} .ds-out .ds-name{color:var(--red);text-decoration:line-through;text-decoration-thickness:1.5px} .ds-out:hover .ds-magnet{box-shadow:none;background:var(--red-soft)}"
+    },
+    {
+      "name": "Marker Arrow and Annotation",
+      "kind": "custom",
+      "refersTo": "counter-incoming",
+      "description": "Red marker stroke from ghost to incoming counter, drawn in over 640ms; gain written in marker, repeated in type on the plate.",
+      "html": "<div class=\"ds-ink\"><svg viewBox=\"0 0 100 40\" aria-hidden=\"true\"><path d=\"M12 30 C 30 8, 60 6, 86 22\" pathLength=\"1\"/><path d=\"M80 15 L86 22 L77 24\" pathLength=\"1\"/></svg><span class=\"ds-mk\">+8.4</span></div>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-ink{position:relative;width:280px;height:112px;background:var(--board);border-radius:6px} .ds-ink svg{width:100%;height:100%} .ds-ink path{fill:none;stroke:var(--red);stroke-width:1.15;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;animation:ds-draw 640ms var(--ease-out) 120ms forwards} .ds-ink:hover path{stroke-width:1.5} .ds-mk{position:absolute;left:46%;top:2px;transform:rotate(-4deg);font-family:'Permanent Marker','Marker Felt',cursive;font-size:22px;line-height:1;color:var(--red)} @keyframes ds-draw{to{stroke-dashoffset:0}} @media (prefers-reduced-motion:reduce){.ds-ink path{animation:none;stroke-dashoffset:0}}"
+    },
+    {
+      "name": "Reversed Plate",
+      "kind": "card",
+      "refersTo": "plate",
+      "description": "The one dark object per screen: each move with its proof line, stance, and yellow condensed gain.",
+      "html": "<section class=\"ds-plate\"><div class=\"ds-ph\"><h2>This week</h2><p>2 FT · £2.2m in bank</p></div><button class=\"ds-row\" aria-pressed=\"false\"><span class=\"ds-rm\"><span class=\"ds-what\">Hall → Van Hecke</span><span class=\"ds-proof\">SUN (a) · 90 mins · xG/90 0.14 · returned 9/11</span><span class=\"ds-stance\">Rival doesn't: differential</span></span><span class=\"ds-gc\"><span class=\"ds-gain\">+8.4</span><span class=\"ds-cap\">6 GWs</span></span></button></section>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-plate{max-width:380px;border-radius:var(--radius);background:var(--plate);color:var(--plate-text);padding:14px 16px 12px;box-shadow:var(--shadow-panel)} .ds-ph{display:flex;align-items:baseline;justify-content:space-between;gap:10px} .ds-ph h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.01em} .ds-ph p{margin:0;font-size:13px;color:var(--plate-mute);white-space:nowrap} .ds-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:11px 0;border:0;border-bottom:1px solid var(--plate-2);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color 160ms ease} .ds-row:hover{background:rgb(255 255 255 / .04)} .ds-row[aria-pressed=true]{background:rgb(255 212 0 / .08)} .ds-row:focus-visible{outline:2px solid var(--yellow);outline-offset:2px} .ds-rm{display:grid;gap:2px} .ds-what{font-size:16px;font-weight:700} .ds-proof{font-size:12.5px;color:var(--plate-mute)} .ds-stance{font-size:12.5px} .ds-gc{display:grid;justify-items:end} .ds-gain{font-size:26px;font-weight:800;line-height:1;color:var(--yellow);font-stretch:72%} .ds-cap{font-size:11px;color:var(--plate-mute)}"
+    },
+    {
+      "name": "Stake Figure",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "The one display-scale figure: gap to the rival, red behind / blue ahead, with the words beside it.",
+      "html": "<div class=\"ds-stake\"><p class=\"ds-fig ds-behind\">−46</p><div class=\"ds-st\"><p><b>behind Rival</b> · 2nd of 6</p><p>Edge +3.3/GW · 33% to finish above</p></div></div>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-stake{display:flex;align-items:center;gap:14px;padding:6px 0 12px;background:var(--wall)} .ds-stake p{margin:0} .ds-fig{font-size:84px;font-weight:900;line-height:.82;letter-spacing:-.03em;font-stretch:72%} .ds-behind{color:var(--red)} .ds-st{display:grid;gap:1px;font-size:13.5px;line-height:1.35;color:var(--ink-2)} .ds-st b{color:var(--ink)}"
+    },
+    {
+      "name": "Subs Strip",
+      "kind": "card",
+      "refersTo": "subs-strip",
+      "description": "Board-coloured panel holding small counters in bench order.",
+      "html": "<section class=\"ds-bench\"><h3>Subs, in order</h3><div class=\"ds-br\"><button class=\"ds-counter ds-mine\"><span class=\"ds-magnet\"><span class=\"ds-xpts\">3.8</span></span><span class=\"ds-name\">Kinsky</span></button><button class=\"ds-counter ds-mine\"><span class=\"ds-magnet\"><span class=\"ds-xpts\">3.9</span></span><span class=\"ds-name\">Rogers</span></button><button class=\"ds-counter ds-mine\"><span class=\"ds-magnet\"><span class=\"ds-xpts\">3.6</span></span><span class=\"ds-name\">Palmer</span></button></div></section>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-counter{display:inline-flex;flex-direction:column;align-items:center;gap:3px;width:70px;padding:0;border:0;background:none;cursor:pointer;font:inherit} .ds-magnet{position:relative;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;color:#fff;box-shadow:var(--shadow-magnet);transition:transform 260ms var(--ease-out),box-shadow 260ms var(--ease-out)} .ds-magnet::before{content:'';position:absolute;inset:3px 6px auto;height:38%;border-radius:50% 50% 45% 45%;background:linear-gradient(180deg,rgb(255 255 255 / .34),rgb(255 255 255 / 0))} .ds-mine .ds-magnet{background:radial-gradient(circle at 50% 35%,#3566e8,var(--blue) 55%,var(--blue-deep))} .ds-incoming .ds-magnet{background:radial-gradient(circle at 50% 35%,#e04545,var(--red) 55%,#9f1414)} .ds-xpts{position:relative;font-size:16px;font-weight:800;font-stretch:72%} .ds-name{padding:0 4px;border-radius:3px;background:rgb(247 248 250 / .85);font-size:11.5px;font-weight:700;font-stretch:72%;line-height:1.25;white-space:nowrap} .ds-armband,.ds-vice{position:absolute;top:-3px;right:-5px;display:grid;place-items:center;width:17px;height:17px;border-radius:4px;font-size:9.5px;font-weight:800;box-shadow:0 1px 2px rgb(21 24 28 / .35)} .ds-armband{background:var(--yellow);color:var(--ink)} .ds-shared{position:absolute;bottom:-2px;left:-5px;display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-size:9.5px;font-weight:800} .ds-counter:hover .ds-magnet{transform:translateY(-2px);box-shadow:var(--shadow-lift)} .ds-counter:active .ds-magnet{transform:scale(.96)} .ds-counter:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px} .ds-out .ds-magnet{background:transparent;color:var(--red);box-shadow:none;border:2px dashed var(--red)} .ds-out .ds-magnet::before{display:none} .ds-out .ds-name{color:var(--red);text-decoration:line-through;text-decoration-thickness:1.5px} .ds-out:hover .ds-magnet{box-shadow:none;background:var(--red-soft)} .ds-bench{padding:10px 12px 12px;border-radius:12px;background:var(--board);box-shadow:inset 0 0 0 1px rgb(21 24 28 / .06),var(--shadow-panel)} .ds-bench h3{margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)} .ds-br{display:flex;justify-content:space-around;gap:8px 4px} .ds-bench .ds-magnet{width:40px;height:40px} .ds-bench .ds-xpts{font-size:12.5px}"
+    },
+    {
+      "name": "Primary Button and Team ID Field",
+      "kind": "input",
+      "refersTo": "button-primary",
+      "description": "The landing's one primary action: 52px white field with ink border, magnet-blue submit.",
+      "html": "<form class=\"ds-form\"><input class=\"ds-input\" placeholder=\"Team ID or Points page link\"><button type=\"button\" class=\"ds-btn-primary\">Plan my week</button></form>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-form{display:flex;gap:8px;max-width:460px} .ds-input{flex:1;min-width:0;min-height:52px;padding:10px 14px;border-radius:10px;border:2px solid var(--ink);background:#fff;font:inherit;font-size:17px;font-weight:500;color:var(--ink)} .ds-input::placeholder{color:var(--ink-3);font-size:15px} .ds-input:focus-visible{outline:3px solid rgb(29 78 216 / .35);outline-offset:0;border-color:var(--blue)} .ds-btn-primary{min-height:52px;padding:0 18px;border:0;border-radius:10px;background:var(--blue);color:#fff;font:inherit;font-size:16px;font-weight:800;box-shadow:0 1px 2px rgb(21 24 28 / .2),0 6px 14px rgb(29 78 216 / .25);cursor:pointer;transition:transform 160ms var(--ease-out),background-color 160ms ease} .ds-btn-primary:hover{background:var(--blue-deep)} .ds-btn-primary:active{transform:translateY(1px)} .ds-btn-primary:focus-visible{outline:2px solid var(--blue);outline-offset:3px}"
+    },
+    {
+      "name": "Segments and Pill Toggle",
+      "kind": "chip",
+      "refersTo": "segment",
+      "description": "Option controls inside sheets: white segments that fill blue when checked; pill toggles that fill ink when pressed.",
+      "html": "<div class=\"ds-row2\"><label class=\"ds-seg\"><input type=\"radio\" name=\"ft\" checked><span>1</span></label><label class=\"ds-seg\"><input type=\"radio\" name=\"ft\"><span>2</span></label><label class=\"ds-seg\"><input type=\"radio\" name=\"ft\"><span>3</span></label><button class=\"ds-toggle\" aria-pressed=\"true\">Lock</button><button class=\"ds-toggle\" aria-pressed=\"false\">Ban</button></div>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-row2{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:12px;background:var(--board)} .ds-seg{position:relative} .ds-seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer} .ds-seg span{display:grid;place-items:center;min-width:40px;min-height:40px;padding:0 12px;border-radius:8px;border:1.5px solid var(--board-line);background:#fff;font-weight:600} .ds-seg:hover span{border-color:var(--ink-3)} .ds-seg input:checked+span{background:var(--blue);border-color:var(--blue);color:#fff} .ds-seg input:focus-visible+span{outline:2px solid var(--blue);outline-offset:2px} .ds-toggle{min-height:40px;padding:8px 14px;border-radius:99px;border:1.5px solid var(--board-line);background:#fff;font:inherit;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer} .ds-toggle:hover{border-color:var(--ink-3)} .ds-toggle[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff} .ds-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:2px}"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "Phone navigation: five stroke-icon tabs; current tab in magnet blue. Desktop swaps to a 216px rail on wall-deep.",
+      "html": "<nav class=\"ds-tabs\"><a aria-current=\"page\" href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"5\" y=\"4\" width=\"14\" height=\"17\" rx=\"2\"/><path d=\"M9 4h6v3H9zM9 12h6M9 16h4\"/></svg>Plan</a><a href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z\"/></svg>League</a><a href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"9\" cy=\"8\" r=\"3\"/><path d=\"M3 20c0-3 3-5 6-5s6 2 6 5\"/></svg>Squad</a></nav>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-tabs{display:grid;grid-template-columns:repeat(3,1fr);padding:6px 4px;background:rgb(247 248 250 / .96);border-top:1px solid var(--board-line);max-width:360px} .ds-tabs a{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 4px;font-size:11px;font-weight:500;color:var(--ink-3);text-decoration:none;border-radius:8px} .ds-tabs a:hover{color:var(--ink)} .ds-tabs a[aria-current=page]{color:var(--blue);font-weight:700} .ds-tabs a:focus-visible{outline:2px solid var(--blue);outline-offset:2px}"
+    },
+    {
+      "name": "Sheet",
+      "kind": "card",
+      "refersTo": "sheet",
+      "description": "Native dialog on the board colour: bottom sheet on phones, 420px right sheet from 960px.",
+      "html": "<div class=\"ds-sheet\"><div class=\"ds-sh\"><h2>Options</h2><button class=\"ds-close\" aria-label=\"Close\">×</button></div><p>Free transfers, horizon and locks.</p></div>",
+      "css": ":host{--wall:#e6e8eb;--wall-deep:#d9dde2;--board:#f7f8fa;--board-line:#cfd4db;--frame:#a3aab3;--frame-light:#c6ccd3;--ink:#15181c;--ink-2:#4a525c;--ink-3:#6b737d;--blue:#1d4ed8;--blue-deep:#1739a8;--red:#c81e1e;--red-soft:#fbe4e4;--yellow:#ffd400;--amber:#b45309;--plate:#15181c;--plate-2:#262b31;--plate-text:#f3f4f6;--plate-mute:#b7bec7;--radius:10px;--shadow-magnet:0 2px 3px rgb(21 24 28 / .28),0 1px 0 rgb(21 24 28 / .18);--shadow-lift:0 8px 14px rgb(21 24 28 / .24),0 2px 4px rgb(21 24 28 / .2);--shadow-panel:0 1px 2px rgb(21 24 28 / .08),0 6px 18px rgb(21 24 28 / .06);--ease-out:cubic-bezier(.16,1,.3,1);font-family:Archivo,'Helvetica Neue',Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)} .ds-sheet{max-width:390px;border-radius:16px 16px 0 0;background:var(--board);padding:6px 16px 24px;box-shadow:0 -8px 30px rgb(21 24 28 / .18);animation:ds-rise 320ms var(--ease-out)} .ds-sh{display:flex;align-items:center;justify-content:space-between;padding:12px 0 10px} .ds-sh h2{margin:0;font-size:20px;font-weight:800} .ds-sheet p{margin:0;color:var(--ink-2)} .ds-close{width:40px;height:40px;border:0;border-radius:50%;background:transparent;color:var(--ink-2);font-size:22px;cursor:pointer} .ds-close:hover{background:var(--wall);color:var(--ink)} .ds-close:focus-visible{outline:2px solid var(--blue);outline-offset:2px} @keyframes ds-rise{from{transform:translateY(24px);opacity:.6}} @media (prefers-reduced-motion:reduce){.ds-sheet{animation:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Dressing-Room Tactics Board",
+    "overview": "Every working screen is a white melamine board in a brushed-aluminium frame, hung on a cool grey wall. The squad sits on it as glossy magnetic counters; the week's transfers are drawn in red marker, each arrow pulling an outgoing counter off the pitch to the incoming one. Beside the board hangs one dark plate that lists the same moves in type, with the evidence under each. The metaphor is literal enough to be read at a glance on a phone before the deadline, and the data never depends on it: everything on the board is said again, in set type, somewhere readable.\n\nDensity is a manager's, not an analyst's. One stake figure, one board, one plate, then the long tables below the fold for anyone who wants them. Type is a single workhorse grotesque (Archivo) whose width axis does the hierarchy work: condensed and heavy for figures and names, normal width for reading. Hand lettering (Permanent Marker) is the marker on the board and nothing else.\n\nThe system is light only, on purpose. A whiteboard is a light object, and the product is used on phones in daylight, on the bus or at work, in the days before a deadline. There is no dark theme and no `prefers-color-scheme` branch; the browser chrome is tinted to the wall (`themeColor` #E6E8EB). The one dark surface is the reversed plate, which is an object in the room, not a mode.",
+    "keyCharacteristics": [
+      "Physical materials, rendered lightly: wall, framed board, magnets, marker. No textures, no photographs.",
+      "One grotesque on a width axis; condensed for numbers, normal for words; tabular figures everywhere.",
+      "Blue is yours, red is change, yellow is the captain and the gain. Each is always paired with a shape or letter.",
+      "One reversed plate and one display-scale figure per screen.",
+      "Marker annotates; type carries the data.",
+      "Motion is the marker being drawn and the magnet being lifted; nothing else moves on its own."
+    ],
+    "rules": [
+      {
+        "name": "The Magnet Meaning Rule",
+        "body": "Blue means a player you keep, red means a player arriving or leaving, yellow means the captain or a gain. Do not use these three for decoration, categories or charts.",
+        "section": "colors"
+      },
+      {
+        "name": "The Colour-Plus-Shape Rule",
+        "body": "Colour is never the only signal. Captain and vice carry the letters C and V; outgoing counters are a dashed ring with the name struck through; rival-owned players carry a letter disc; doubles carry \"×2\"; doubt carries its own badge; the stake figure carries \"behind\" or \"ahead\" in words beside it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Width-Axis Rule",
+        "body": "Hierarchy for numbers comes from the width axis and weight, not from more faces. Any figure that is a name or a number on a counter, a gain, or the display figure is set condensed (`.cond`, width 72%).",
+        "section": "typography"
+      },
+      {
+        "name": "The Marker Annotates Rule",
+        "body": "Permanent Marker is never the only place a value appears. The board's marker gains are `aria-hidden` and repeat a figure the plate sets in type. Marker never sets labels, buttons, headings or body copy.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "`font-variant-numeric: tabular-nums` is set on the body; columns of figures always align.",
+        "section": "typography"
+      },
+      {
+        "name": "The League-Column-Survives Rule",
+        "body": "On phones (below 760px) low-value table columns give way so the league columns survive: Bench and Price diff hide, and the Edge header drops its \"vs Rival\" tail, while League EO and Edge always stay visible.",
+        "section": "layout"
+      },
+      {
+        "name": "The Board-First Rule",
+        "body": "On every working screen the framed board is the largest object in the first viewport; tables and long copy live below it.",
+        "section": "layout"
+      },
+      {
+        "name": "The Lift-Means-Selected Rule",
+        "body": "A counter rises (translateY -3px, scale 1.07, lift shadow) only when you hover it or its move is selected. Outgoing ghosts never cast a shadow; a lifted ghost fills with red-soft instead.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep exactly one reversed plate (plate on plate-text) per screen; everything else sits on the wall or the board.",
+      "Do keep exactly one display-scale figure per viewport, condensed at width 72%, against small labels.",
+      "Do pair every magnet colour with a shape, letter or word: C and V, dashed ring plus strikethrough, the rival letter disc, \"behind\"/\"ahead\".",
+      "Do give everything drawn on the board a typed equivalent: the plate lists every move, the key explains every mark.",
+      "Do put each claim beside its proof: a move's stat line sits directly under it, a landing claim sits beside its demonstration.",
+      "Do keep player rows to the same fields in the same places across plate, sheet and tables.",
+      "Do use the standard ease (cubic-bezier(0.16, 1, 0.3, 1)) for lifts, sheets, chevrons and the arrow draw; 160 to 320ms for state, 640ms for the stroke.",
+      "Do honour reduced motion: all animations and transitions collapse to 0.01ms, arrows appear fully drawn, sheets appear in place, the loading ghost holds still."
+    ],
+    "donts": [
+      "Don't add a dark theme or a `prefers-color-scheme` branch; the board is a light object used in daylight.",
+      "Don't set data, labels, buttons or headings in Permanent Marker, or let a marker figure be the only place a value appears.",
+      "Don't use blue, red or yellow for anything but their magnet meanings, and don't put yellow text on the board.",
+      "Don't add a second reversed plate, a second display figure, or a stack of stat cards; the board carries the screen.",
+      "Don't put an uppercase eyebrow above a headline; the 10px uppercase label is for board markings and component labels only.",
+      "Don't set the product name as a tracked-caps eyebrow above a heading; the wordmark is 17px 800 in sentence case on its own row.",
+      "Don't introduce a second grotesque or a separate display face; use Archivo's width axis.",
+      "Don't let anything animate on its own after the arrows are drawn, except the loading ghost."
+    ]
+  }
+}

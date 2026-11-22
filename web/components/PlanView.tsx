@@ -7,7 +7,9 @@ import { ApiError, fetchPlan } from "@/lib/api";
 import { rememberTeam, useTeamSettings } from "@/lib/settings";
 import type { Move, Plan, PlayerCard } from "@/lib/types";
 import { deadline, firstName, fixed, ordinal, pct, signed, signedInt } from "@/lib/format";
-import Board from "./Board";
+import Board, { Bench } from "./Board";
+import TeamForm from "./TeamForm";
+import { useTeamStatus } from "./Shell";
 import PlayerSheet from "./PlayerSheet";
 import OptionsSheet from "./OptionsSheet";
 import styles from "./PlanView.module.css";
@@ -45,6 +47,9 @@ function usePlan(teamId: number) {
 
 export default function PlanView({ teamId }: { teamId: number }) {
   const { plan, error, loading, settings, update, refresh } = usePlan(teamId);
+  const { setMissing } = useTeamStatus();
+  const missing = !plan && error?.status === 404;
+  useEffect(() => setMissing(missing), [missing, setMissing]);
   const [selected, setSelected] = useState<number | null>(null);
   const [openPlayer, setOpenPlayer] = useState<number | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -80,6 +85,12 @@ export default function PlanView({ teamId }: { teamId: number }) {
 
   return (
     <div className={styles.page}>
+      <div className={styles.brandRow}>
+        <Link href="/" className={styles.wordmark}>FPL Agent</Link>
+        <button type="button" className={styles.optionsBtn} onClick={() => setOptionsOpen(true)}>
+          <SlidersHorizontal size={17} aria-hidden /> Options
+        </button>
+      </div>
       <header className={styles.top}>
         <div className={styles.title}>
           <h1>{plan.team.name ?? `Team ${teamId}`}</h1>
@@ -88,7 +99,7 @@ export default function PlanView({ teamId }: { teamId: number }) {
             <span className={styles.status} aria-live="polite">{loading ? " · re-planning…" : ""}</span>
           </p>
         </div>
-        <button type="button" className={styles.optionsBtn} onClick={() => setOptionsOpen(true)}>
+        <button type="button" className={`${styles.optionsBtn} ${styles.optionsWide}`} onClick={() => setOptionsOpen(true)}>
           <SlidersHorizontal size={17} aria-hidden /> Options
         </button>
       </header>
@@ -105,7 +116,6 @@ export default function PlanView({ teamId }: { teamId: number }) {
           <Board
             players={players}
             xi={plan.lineup.xi}
-            bench={plan.lineup.bench}
             moves={plan.moves}
             captain={plan.captain}
             vice={plan.vice_captain}
@@ -122,8 +132,7 @@ export default function PlanView({ teamId }: { teamId: number }) {
           <div className={styles.plateHead}>
             <h2 id="this-week">This week</h2>
             <p>
-              {plan.budget.free_transfers} free transfer{plan.budget.free_transfers === 1 ? "" : "s"} · £
-              {plan.budget.bank.toFixed(1)}m in the bank
+              {plan.budget.free_transfers} FT · £{plan.budget.bank.toFixed(1)}m in bank
             </p>
           </div>
 
@@ -159,6 +168,10 @@ export default function PlanView({ teamId }: { teamId: number }) {
             Gains are against making no transfers{plan.summary.hits > 0 ? `, after a −${plan.summary.hits} hit` : ""}.
           </p>
         </section>
+
+        <div className={styles.benchCol}>
+          <Bench players={players} bench={plan.lineup.bench} moves={plan.moves} rivalName={rivalName} onOpenPlayer={setOpenPlayer} />
+        </div>
       </div>
 
       <div className={styles.below}>
@@ -177,8 +190,12 @@ export default function PlanView({ teamId }: { teamId: number }) {
                 <tr>
                   <th scope="col">GW</th><th scope="col">Captain</th>
                   <th scope="col" className={styles.num}>XI xPts</th>
-                  <th scope="col" className={styles.num}>Bench</th>
-                  {rival && <th scope="col" className={styles.num}>Edge vs {firstName(rival.manager_name)}</th>}
+                  <th scope="col" className={`${styles.num} ${styles.wide}`}>Bench</th>
+                  {rival && (
+                    <th scope="col" className={styles.num}>
+                      Edge<span className={styles.wideInline}> vs {firstName(rival.manager_name)}</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -189,7 +206,7 @@ export default function PlanView({ teamId }: { teamId: number }) {
                       <td>GW{g.gw}</td>
                       <td>{pl(g.captain)?.name ?? "—"}</td>
                       <td className={styles.num}>{fixed(g.xi_points)}</td>
-                      <td className={styles.num}>{fixed(g.bench_points)}</td>
+                      <td className={`${styles.num} ${styles.wide}`}>{fixed(g.bench_points)}</td>
                       {rival && <td className={styles.num}>{signed(edge)}</td>}
                     </tr>
                   );
@@ -260,25 +277,25 @@ function Stake({ plan, onRival, onLeague }: { plan: Plan; onRival: (e: number) =
             <span className="sr-only">Compare with</span>
             <select value={rival.entry} onChange={(e) => onRival(Number(e.target.value))}>
               {others.map((s) => (
-                <option key={s.entry} value={s.entry}>{s.manager_name} ({s.team_name})</option>
+                <option key={s.entry} value={s.entry}>{s.manager_name}</option>
               ))}
             </select>
           </label>
+          {" · "}{ordinal(league.my_rank)} of {league.size}
         </p>
         <p>
-          {ordinal(league.my_rank)} of {league.size} in{" "}
-          {plan.leagues.length > 1 ? (
-            <label className={styles.rivalPick}>
-              <span className="sr-only">League</span>
-              <select value={league.id} onChange={(e) => onLeague(Number(e.target.value))}>
-                {plan.leagues.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            </label>
-          ) : league.name}
-        </p>
-        <p>
-          Your edge {signed(rival.edge_per_gw)} xPts a week · about {pct(rival.p_ahead)} to finish above{" "}
-          {firstName(rival.manager_name)}
+          Edge {signed(rival.edge_per_gw)}/GW · {pct(rival.p_ahead)} to finish above
+          {plan.leagues.length > 1 && (
+            <>
+              {" · "}
+              <label className={styles.rivalPick}>
+                <span className="sr-only">League</span>
+                <select value={league.id} onChange={(e) => onLeague(Number(e.target.value))}>
+                  {plan.leagues.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </label>
+            </>
+          )}
         </p>
       </div>
     </section>
@@ -355,7 +372,7 @@ function CloseCalls({ moves, players }: { moves: Move[]; players: Record<string,
             <tr>
               <th scope="col">Instead of</th><th scope="col">Option</th>
               <th scope="col" className={styles.num}>xPts diff</th>
-              <th scope="col" className={styles.num}>Price diff</th>
+              <th scope="col" className={`${styles.num} ${styles.wide}`}>Price diff</th>
               <th scope="col" className={styles.num}>League EO</th>
             </tr>
           </thead>
@@ -365,7 +382,7 @@ function CloseCalls({ moves, players }: { moves: Move[]; players: Record<string,
                 <td>{pick?.name}</td>
                 <td>{p?.name ?? a.id}</td>
                 <td className={styles.num}>{signed(a.delta)}</td>
-                <td className={styles.num}>{a.price != null && m.buy_price != null ? signed(a.price - m.buy_price) : "—"}</td>
+                <td className={`${styles.num} ${styles.wide}`}>{a.price != null && m.buy_price != null ? signed(a.price - m.buy_price) : "—"}</td>
                 <td className={styles.num}>{p?.league_eo == null ? "—" : `${Math.round(p.league_eo)}%`}</td>
               </tr>
             ))}
@@ -393,13 +410,23 @@ function Skeleton() {
 function Failure({ error, retry }: { error: ApiError; retry: () => void }) {
   const notFound = error.status === 404;
   return (
-    <div className={styles.failure} role="alert">
-      <h1>{notFound ? "No team with that ID" : "Couldn't load your plan"}</h1>
-      <p>{error.message}</p>
-      <div className={styles.failureActions}>
-        {!notFound && <button type="button" onClick={retry}>Try again</button>}
-        <Link href="/">{notFound ? "Enter a different team ID" : "Back to the start"}</Link>
+    <div className={styles.failure}>
+      <Link href="/" className={styles.wordmark}>FPL Agent</Link>
+      <div className={styles.emptyBoard} aria-hidden>
+        <span>No counters on the board</span>
       </div>
+      <div role="alert" className={styles.failureText}>
+        <h1>{notFound ? "No team with that ID" : "Couldn't load your plan"}</h1>
+        <p>{error.message}</p>
+      </div>
+      {notFound ? (
+        <TeamForm compact />
+      ) : (
+        <div className={styles.failureActions}>
+          <button type="button" onClick={retry}>Try again</button>
+          <Link href="/">Back to the start</Link>
+        </div>
+      )}
     </div>
   );
 }

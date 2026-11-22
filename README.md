@@ -13,6 +13,7 @@ fpl_agent/
 ├── engine.py         # sync → forecast → optimise; shared by CLI and dashboard
 ├── league.py         # mini-league standings, rivals' squads/chips, effective ownership, head-to-head
 ├── memory.py         # persistent memory of your team, transfers, chips, preferences
+├── api.py            # JSON API for the web app (FastAPI)
 ├── ui/app.py         # Streamlit dashboard
 └── cli/              # Click-based command-line interface with Rich output
 ```
@@ -33,7 +34,29 @@ public API, so no login is needed. Public data can't see transfers you've
 already made for the next deadline; if you've made some, set your free
 transfers and bank in the Memory tab (or `memory set-ft` / `memory set-bank`).
 
-### 2. Open the dashboard
+### 2. Run the web app (new)
+
+The web app in `web/` is the product being built for others to use: a landing
+page where anyone enters their team ID, and a phone-first Plan screen that
+draws your moves on a tactics board against your mini-league rival. It talks
+to the planning engine through a small JSON API.
+
+```bash
+python fpl_agent.py api              # JSON API on http://127.0.0.1:8000
+cd web && pnpm install && pnpm dev   # web app on http://localhost:3000
+```
+
+The web app proxies `/api/*` to `FPL_API_URL` (default `http://127.0.0.1:8000`).
+Settings such as locked and banned players stay in the visitor's browser and
+are sent with each request. Plan is built in full; League, Squad, Players and
+More are still being rebuilt, and work today in the dashboard below.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/team/{id}/plan` | The full plan as JSON. Query: `horizon`, `chip` (`none`/`wildcard`/`freehit`), `free_transfers`, `bank`, `ft_value`, `bench_weight`, `consistency`, `league`, `rival`, `locked`, `banned` (comma-separated ids), `fresh` |
+| `GET /api/model-check` | Backtest summary against the points-per-game baseline |
+
+### 2b. Or open the dashboard
 
 ```bash
 python fpl_agent.py ui            # opens http://localhost:8501

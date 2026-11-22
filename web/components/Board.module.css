@@ -10,7 +10,7 @@
 .board {
   --c: clamp(36px, 10.6vw, 48px);
   position: relative;
-  aspect-ratio: 100 / 118;
+  aspect-ratio: 100 / 98;
   border-radius: 6px;
   background:
     radial-gradient(120% 80% at 30% 10%, rgb(255 255 255 / 0.9), transparent 60%),
@@ -45,14 +45,10 @@
   color: var(--ink-3);
 }
 
-.tagSubs { transform: none; }
-
 /* -- Counters ------------------------------------------------------------- */
 
 .counter {
-  position: absolute;
-  z-index: 2;
-  transform: translate(-50%, -50%);
+  --c: clamp(36px, 10.6vw, 48px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -62,6 +58,13 @@
   border: 0;
   background: none;
   transition: transform 260ms var(--ease-out);
+}
+
+/* Counters on the board are pinned at their formation spot. */
+.placed {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
 }
 
 .magnet {
@@ -99,8 +102,7 @@
 .out .magnet::before { display: none; }
 .out .name { color: var(--red); text-decoration: line-through; text-decoration-thickness: 1.5px; }
 
-.benchCounter { --c: clamp(30px, 8.6vw, 38px); }
-.benchCounter .magnet { filter: saturate(0.7); }
+.small { --c: clamp(32px, 9vw, 40px); }
 
 .blank .magnet { background: #9aa3ad; }
 
@@ -111,7 +113,7 @@
   letter-spacing: -0.01em;
 }
 
-.benchCounter .xpts { font-size: 12px; }
+.small .xpts { font-size: 12.5px; }
 
 .name {
   max-width: 100%;
@@ -184,7 +186,7 @@
 
 .counter:active .magnet { transform: scale(0.96); }
 
-.lifted { z-index: 3; }
+.placed.lifted { z-index: 3; }
 .lifted .magnet { transform: translateY(-3px) scale(1.07); box-shadow: var(--shadow-lift); }
 .lifted.out .magnet { box-shadow: none; background: var(--red-soft); }
 
@@ -209,6 +211,8 @@
 .dim { opacity: 0.28; }
 
 @keyframes draw { to { stroke-dashoffset: 0; } }
+
+.large .gain { font-size: clamp(24px, 6.6vw, 32px); }
 
 .gain {
   position: absolute;
@@ -268,3 +272,34 @@
 @media (prefers-reduced-motion: reduce) {
   .arrow path { animation: none; stroke-dashoffset: 0; }
 }
+
+/* -- Subs strip ------------------------------------------------------------ */
+
+.bench {
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: var(--board);
+  box-shadow: inset 0 0 0 1px rgb(21 24 28 / 0.06), var(--shadow-panel);
+}
+
+.benchHead {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+.benchRow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 8px 4px;
+}
+
+.benchItem { display: flex; align-items: flex-start; gap: 2px; }
+.benchArrow { margin-top: 12px; color: var(--red); }

@@ -17,10 +17,9 @@ export default async function Landing() {
 
       <section className={styles.hero}>
         <div className={styles.pitch}>
-          <h1>Your gameweek, planned against your mini-league.</h1>
+          <h1>Plan your gameweek to beat your mini-league.</h1>
           <p className={styles.lede}>
-            Enter your team ID to get this deadline&apos;s transfers, captain and chip call. Every pick comes with the
-            stats behind it and what it does to the gap with your rival.
+            Transfers, captain and chips for this deadline, with the stats behind every pick.
           </p>
           <TeamForm autoFocus />
           <p className={styles.small}>Uses public FPL data. It never touches your FPL account; you make the moves.</p>
@@ -87,22 +86,32 @@ export default async function Landing() {
               We replay the season: hide everything after an earlier gameweek, predict the next {check.horizon}, then
               check what really happened. The yardstick is the simplest guess, each player scoring his average so far.
             </p>
-            <dl className={styles.figures}>
-              <div>
-                <dt>Typical miss per player, per week</dt>
-                <dd><span className="cond">{check.model_miss.toFixed(1)}</span> pts</dd>
-                <p>against {check.baseline_miss.toFixed(1)} for the simple guess</p>
-              </div>
-              <div>
-                <dt>Its top 20 picks each week scored</dt>
-                <dd><span className="cond">{check.model_top20.toFixed(1)}</span> pts each</dd>
-                <p>against {check.baseline_top20.toFixed(1)} for the guess&apos;s top 20, and {check.average_player.toFixed(1)} for a typical regular</p>
-              </div>
-            </dl>
+            <table className={styles.compare}>
+              <thead>
+                <tr>
+                  <th scope="col"><span className="sr-only">Measure</span></th>
+                  <th scope="col">FPL Agent</th>
+                  <th scope="col">Simple guess</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Typical miss per player, per week <span>lower is better</span></th>
+                  <td className={styles.win}>{check.model_miss.toFixed(1)} pts</td>
+                  <td>{check.baseline_miss.toFixed(1)} pts</td>
+                </tr>
+                <tr>
+                  <th scope="row">What its top 20 picks scored, each <span>higher is better</span></th>
+                  <td className={styles.win}>{check.model_top20.toFixed(1)} pts</td>
+                  <td>{check.baseline_top20.toFixed(1)} pts</td>
+                </tr>
+              </tbody>
+            </table>
             <p className={styles.small}>
               {check.predictions.toLocaleString("en-GB")} predictions across GW{check.first_gw}–{check.last_gw}. FPL
               scores are lumpy: a forward who should get 5 gets 2 or 8 depending on one shot, so no model gets near
-              zero. Perfect hindsight would have averaged {check.hindsight_top20.toFixed(1)}.
+              zero. A typical regular scored {check.average_player.toFixed(1)}; perfect hindsight would have averaged{" "}
+              {check.hindsight_top20.toFixed(1)}.
             </p>
           </>
         ) : (

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Board from "./Board";
 import {
-  SAMPLE_BENCH, SAMPLE_CAPTAIN, SAMPLE_MOVES, SAMPLE_PLAYERS, SAMPLE_RIVAL, SAMPLE_VICE, SAMPLE_XI,
+  SAMPLE_CAPTAIN, SAMPLE_MOVES, SAMPLE_PLAYERS, SAMPLE_RIVAL, SAMPLE_VICE, SAMPLE_XI,
 } from "@/lib/sample";
 import { fixed } from "@/lib/format";
 import styles from "./SampleBoard.module.css";
@@ -20,7 +20,6 @@ export default function SampleBoard() {
       <Board
         players={SAMPLE_PLAYERS}
         xi={SAMPLE_XI}
-        bench={SAMPLE_BENCH}
         moves={SAMPLE_MOVES}
         captain={SAMPLE_CAPTAIN}
         vice={SAMPLE_VICE}
@@ -28,6 +27,7 @@ export default function SampleBoard() {
         horizon={6}
         selected={selected}
         drawKey="sample"
+        large
         onSelectMove={(i) => setSelected(i)}
         onOpenPlayer={(id) => {
           setFocus(id);

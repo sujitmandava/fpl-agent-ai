@@ -6,6 +6,8 @@
   padding-bottom: calc(72px + env(safe-area-inset-bottom));
 }
 
+.bare .main { padding-bottom: 32px; }
+
 /* Phone: bottom tab bar. */
 .rail { display: none; }
 

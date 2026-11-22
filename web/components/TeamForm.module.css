@@ -35,7 +35,7 @@
   color: #fff;
   font-size: 16px;
   font-weight: 800;
-  box-shadow: 0 2px 0 var(--blue-deep), 0 6px 14px rgb(29 78 216 / 0.25);
+  box-shadow: 0 1px 2px rgb(21 24 28 / 0.2), 0 6px 14px rgb(29 78 216 / 0.25);
   transition: transform 160ms var(--ease-out), background-color 160ms ease;
 }
 
@@ -44,7 +44,7 @@
 .submit:disabled { opacity: 0.75; cursor: progress; }
 .submit:focus-visible { outline-offset: 3px; }
 
-.error { font-size: 14px; color: #8f1515; }
+.error { font-size: 14px; color: #7f1212; }
 
 .recent { font-size: 14px; color: var(--ink-2); }
 .recent a { font-weight: 700; }

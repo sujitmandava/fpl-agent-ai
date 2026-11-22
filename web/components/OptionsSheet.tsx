@@ -32,7 +32,7 @@ export default function OptionsSheet({
       <form className={styles.form} onSubmit={(e) => e.preventDefault()}>
         <fieldset className={styles.field}>
           <legend>Plan ahead</legend>
-          <div className={styles.segment} role="radiogroup" aria-label="Gameweeks to plan over">
+          <div className={styles.horizon} role="radiogroup" aria-label="Gameweeks to plan over">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
               <label key={n} className={styles.seg}>
                 <input type="radio" name="horizon" checked={s.horizon === n} onChange={() => onChange({ horizon: n })} />
@@ -85,7 +85,7 @@ export default function OptionsSheet({
         </fieldset>
 
         <details className={styles.advanced}>
-          <summary>Fine-tuning <ChevronDown size={18} aria-hidden /></summary>
+          <summary>Fine-tuning <ChevronDown className={styles.chev} size={18} aria-hidden /></summary>
           <Range label="Value of saving a transfer" hint="Higher means fewer, surer moves." min={0} max={3} step={0.25}
                  value={s.ftValue} onChange={(v) => onChange({ ftValue: v })} />
           <Range label="Bench weight" hint="How much bench points count, for auto-subs." min={0} max={0.5} step={0.05}

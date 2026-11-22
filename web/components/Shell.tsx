@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createContext, useContext, useMemo, useState } from "react";
 import { ClipboardList, Trophy, Users, Search, MoreHorizontal, ArrowLeftRight } from "lucide-react";
 import styles from "./Shell.module.css";
 
@@ -13,8 +14,18 @@ const SECTIONS = [
   { slug: "more", label: "More", icon: MoreHorizontal },
 ] as const;
 
+// Lets a page tell the shell the team doesn't exist, so it stops offering
+// section tabs that would lead nowhere.
+const TeamStatus = createContext<{ missing: boolean; setMissing: (v: boolean) => void }>({
+  missing: false,
+  setMissing: () => {},
+});
+export const useTeamStatus = () => useContext(TeamStatus);
+
 export default function Shell({ teamId, children }: { teamId: number; children: React.ReactNode }) {
   const pathname = usePathname();
+  const [missing, setMissing] = useState(false);
+  const status = useMemo(() => ({ missing, setMissing }), [missing]);
   const base = `/team/${teamId}`;
 
   const items = SECTIONS.map((s) => {
@@ -24,10 +35,11 @@ export default function Shell({ teamId, children }: { teamId: number; children: 
   });
 
   return (
-    <div className={styles.shell}>
+    <TeamStatus.Provider value={status}>
+    <div className={`${styles.shell} ${missing ? styles.bare : ""}`}>
       <nav className={styles.rail} aria-label="Sections">
         <Link href="/" className={styles.brand}>FPL Agent</Link>
-        <ul>
+        {!missing && <ul>
           {items.map(({ href, label, icon: Icon, active }) => (
             <li key={href}>
               <Link href={href} className={styles.railItem} aria-current={active ? "page" : undefined}>
@@ -36,7 +48,7 @@ export default function Shell({ teamId, children }: { teamId: number; children: 
               </Link>
             </li>
           ))}
-        </ul>
+        </ul>}
         <Link href="/" className={styles.switch}>
           <ArrowLeftRight size={16} aria-hidden /> Switch team
         </Link>
@@ -44,14 +56,15 @@ export default function Shell({ teamId, children }: { teamId: number; children: 
 
       <main className={styles.main}>{children}</main>
 
-      <nav className={styles.tabbar} aria-label="Sections">
+      {!missing && <nav className={styles.tabbar} aria-label="Sections">
         {items.map(({ href, label, icon: Icon, active }) => (
           <Link key={href} href={href} className={styles.tab} aria-current={active ? "page" : undefined}>
             <Icon size={20} strokeWidth={active ? 2.4 : 1.9} aria-hidden />
             <span>{label}</span>
           </Link>
         ))}
-      </nav>
+      </nav>}
     </div>
+    </TeamStatus.Provider>
   );
 }
