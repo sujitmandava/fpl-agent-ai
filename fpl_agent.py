@@ -4,7 +4,7 @@
 Usage:
     python fpl_agent.py refresh
     python fpl_agent.py recommend --manager-id 123456
-    python fpl_agent.py apply --manager-id 123456 --email x --password y
+    python fpl_agent.py ui
 """
 
 from fpl_agent.cli.main import cli

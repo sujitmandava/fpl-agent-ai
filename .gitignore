@@ -20,3 +20,7 @@ Thumbs.db
 *.db
 .pytest_cache/
 .env
+
+# Agent memory (personal team data)
+fpl_memory.json
+.fpl_memory.*.tmp

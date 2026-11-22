@@ -137,8 +137,12 @@ class TestOptimizer:
 
     def test_no_transfers_when_squad_is_optimal(self):
         """If the current squad is already the best, no transfers should happen."""
-        players = _build_players(n=15)
-        # Only 15 players available → must keep current squad
+        # Exactly one valid 15-man squad available → must keep it.
+        rows = []
+        for i, pos in enumerate([1] * 2 + [2] * 5 + [3] * 5 + [4] * 3, start=1):
+            rows.append({"id": i, "web_name": f"P{i}", "element_type": pos,
+                         "team_id": i, "now_cost": 50})
+        players = pd.DataFrame(rows)
         forecast = _build_forecast(players)
         team_state = _build_team_state(players)
 

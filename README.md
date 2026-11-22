@@ -1,17 +1,19 @@
 # FPL Agent AI
 
-An agentic workflow that automates **data ingestion, forecasting, squad optimisation, and decision execution** for Fantasy Premier League.
+A Fantasy Premier League planner: it pulls FPL data, forecasts expected points from underlying stats, optimises transfers, lineup, captain and chips, and shows the results in a local dashboard or the terminal. It never touches your FPL account; you make the moves yourself.
 
 ## Architecture
 
 ```
 fpl_agent/
 ├── data_ingest/      # FPL API client, JSON→DataFrame normalisation, SQLite storage
-├── forecast/         # Expected-points model (weighted form + fixture difficulty)
+├── forecast/         # xPts model (minutes, xG/xA, DC, team ratings) + backtest
 ├── optimizer/        # Mixed-Integer Linear Program (MILP) via PuLP
 ├── planner/          # Recommendation assembly: transfers, lineup, captain, rationale
-├── cli/              # Click-based command-line interface with Rich output
-└── browser_exec/     # Playwright automation to apply recommendations on the FPL website
+├── engine.py         # sync → forecast → optimise; shared by CLI and dashboard
+├── memory.py         # persistent memory of your team, transfers, chips, preferences
+├── ui/app.py         # Streamlit dashboard
+└── cli/              # Click-based command-line interface with Rich output
 ```
 
 ## Quick start
@@ -22,51 +24,85 @@ fpl_agent/
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-# For browser automation only:
-playwright install chromium
 ```
 
-### 2. Pull latest data
+Put `FPL_MANAGER_ID` in `.env` (see `.env.example`).
+
+### 2. Open the dashboard
 
 ```bash
-python fpl_agent.py refresh
+python fpl_agent.py ui            # opens http://localhost:8501
 ```
 
-This fetches the bootstrap-static payload, all fixtures, and per-match history for the top 300 players, then stores everything in `fpl_agent.db` (SQLite).
+| Tab | What it shows |
+|---|---|
+| **Suggestions** | Projected points, gain vs. no transfers, recommended transfers, XI + bench with the stats behind each pick, captain/vice, chip outlook, per-GW plan |
+| **My team** | Squad with purchase/selling prices and xPts, chip status by window, mini-league ranks, saved plans |
+| **Players** | Every player's forecast: filter by position, team, price, minutes; xG/90, xA/90, DC%, CS%, xPts per GW, xPts/£m |
+| **Fixtures** | Team × GW grid coloured by expected goals or clean-sheet chance from the model's team ratings; ratings and recent form |
+| **Memory** | Free-transfer/bank overrides, locked and banned players, notes (same file the CLI uses) |
+| **Model check** | Walk-forward backtest vs. a points-per-game baseline |
 
-### 3. Generate recommendations
+The sidebar sets horizon, Wildcard/Free Hit (only if available), one-off free
+transfers or bank, and how cautious transfers should be. Changing options
+re-solves from cached data without calling the API again; **Refresh from FPL**
+re-syncs.
+
+### 3. Or use the terminal
 
 ```bash
-python fpl_agent.py recommend \
-  --manager-id 123456 \
-  --email you@example.com \
-  --password yourpassword \
-  --horizon 6 \
-  --free-transfers 1 \
-  --bank 15
+python fpl_agent.py recommend --manager-id 123456
 ```
 
-**Output includes:**
+Every run refreshes players and fixtures, re-fetches per-match history when the
+cache is older than 6 hours, syncs your setup into memory, and prints:
 
-- Recommended transfers (sell/buy with prices)
-- Starting XI and bench order
-- Captain & vice-captain pick
-- Expected-points delta
-- Natural-language rationale
+- transfers with xPts gain for next GW and over the horizon
+- the next-GW XI and bench with the stats behind each pick (opponent, expected
+  minutes, xG/90, xA/90, defensive-contribution %, clean-sheet %)
+- captain, vice, projected points, and the gain compared with making no transfers
+- a **chip outlook**: double/blank gameweeks, and the best gameweek for each
+  available chip within its window, with expiry warnings
 
-> **Tip:** Set `FPL_EMAIL` and `FPL_PASSWORD` environment variables to avoid passing credentials on the command line.
+Useful options:
 
-### 4. Apply via browser (optional)
+| Option | Meaning |
+|--------|---------|
+| `--horizon 6` | Gameweeks to plan over |
+| `--wildcard` / `--free-hit` | Plan with that chip active (checked against your available chips) |
+| `--free-transfers N` / `--bank 1.5` | One-off overrides (use `memory set-ft` to persist) |
+| `--ft-value 1.0` | Points a saved free transfer is worth (raise it to make fewer, surer moves) |
+| `--bench-weight 0.1` | How much bench players' EP counts |
+
+### 4. Agent memory
+
+The agent keeps a persistent memory of your setup in `fpl_memory.json`
+(readable JSON, gitignored; set `FPL_MEMORY` to move it). It survives cache
+rebuilds and is updated on every `recommend`, or with `status --sync`.
 
 ```bash
-python fpl_agent.py apply \
-  --manager-id 123456 \
-  --email you@example.com \
-  --password yourpassword \
-  --no-headless
+python fpl_agent.py status                 # team, free transfers, bank, chips, notes, leagues
+python fpl_agent.py status --sync          # refresh from the API first
+
+python fpl_agent.py memory set-ft 4 --reason "made 1 transfer already"   # until the deadline passes
+python fpl_agent.py memory set-bank 0.5
+python fpl_agent.py memory lock Haaland    # always keep / must buy
+python fpl_agent.py memory ban "Le Fee"    # never buy (sell if owned); accents optional
+python fpl_agent.py memory unlock Haaland
+python fpl_agent.py memory note "Saving Free Hit for the GW blank"
+python fpl_agent.py memory clear-overrides
 ```
 
-This launches a Chromium browser, logs into the FPL site, makes the recommended transfers, sets the lineup, and confirms.
+Precedence: command-line flag → memory override → value from the API.
+Overrides are tied to the next deadline and expire after it. If the FPL API
+is unreachable, the agent plans from the last snapshot in memory. Chips are
+tracked per window (GW1–19 / GW20–38) with played / available / expired status.
+
+### 5. Check the model
+
+```bash
+python fpl_agent.py backtest               # walk-forward accuracy on played gameweeks
+```
 
 ## Modules
 
@@ -80,18 +116,27 @@ This launches a Chromium browser, logs into the FPL site, makes the recommended 
 
 ### `forecast`
 
-`ExpectedPointsModel` produces a DataFrame with columns `player_id, expected_points_gw9, …, expected_points_gw14, total_expected_points, variance`.
+`ExpectedPointsModel` predicts expected points (xPts) per player per fixture, scored with the season's rules from the API (`game_config.scoring`):
 
-Approach:
-1. Exponentially-weighted moving average of recent per-GW points.
-2. Fixture-difficulty adjustment (FDR-based multiplier).
-3. Availability penalty (`chance_of_playing_next_round`).
+| Component | Source |
+|-----------|--------|
+| Appearance | P(play), P(60+ mins), expected minutes from recent team matches |
+| Goals, assists | xG/90 and xA/90 (recency-weighted, shrunk toward position average) × opponent-adjusted attack multiplier |
+| Clean sheet, goals conceded | Poisson on goals expected against, from team ratings |
+| Defensive contribution | Rate of hitting the DC threshold in 60+ min games, detected by rebuilding each match's points from the scoring rules |
+| Saves (GK), bonus, yellow cards | Per-90 rates, adjusted for fixture |
+| Availability | `chance_of_playing_next_round`, fading over 4 GWs; departed players 0 |
+
+`team_ratings.py` fits attack/defence ratings per team from a 70/30 blend of xG and goals, weighting recent matches more ("team form"), adjusting for opponent strength, and using FPL's team strength numbers as the early-season prior. Blank gameweeks score 0; double gameweeks sum both fixtures.
+
+`backtest.py` runs a walk-forward check against a points-per-game baseline.
 
 ### `optimizer`
 
-Solves a MILP with PuLP:
-- **Objective:** maximise total expected points minus transfer-hit costs.
-- **Constraints:** 15 players, 2 GK / 5 DEF / 5 MID / 3 FWD, budget cap, max 3 per club, transfer-balance linking.
+Solves a MILP with PuLP that picks the squad, a starting XI and a captain for every gameweek in the horizon:
+- **Objective:** discounted Σ (XI points + captain points + 0.1 × bench points) − 4 × hits − value of free transfers used.
+- **Constraints:** 15 players, 2/5/5/3, ≤3 per club, budget (selling prices for kept players), and a valid formation every gameweek.
+- Raises `OptimizationError` if the solver doesn't reach an optimal solution.
 
 ### `planner`
 
@@ -100,14 +145,6 @@ Solves a MILP with PuLP:
 - Starting XI / bench / bench order
 - Captain & vice-captain
 - Expected-points delta and text rationale
-
-### `browser_exec`
-
-Playwright automation that:
-1. Logs in to the FPL website.
-2. Executes transfers on the Transfers page.
-3. Sets lineup on the Pick Team page.
-4. Verifies each step and returns a list of `StepResult` objects.
 
 ## Running tests
 
@@ -127,6 +164,10 @@ Tests cover:
 |----------|-------------|
 | `FPL_EMAIL` | FPL account email (alternative to `--email`) |
 | `FPL_PASSWORD` | FPL account password (alternative to `--password`) |
+| `FPL_MANAGER_ID` | Your FPL manager ID |
+| `FPL_DB` | SQLite cache path (rebuilt automatically on a new season or schema change) |
+| `FPL_MEMORY` | Agent memory file (default `fpl_memory.json`) |
+| `FPL_FREE_TRANSFERS`, `FPL_BANK` | Optional overrides; normally read from the API |
 
 ## License
 

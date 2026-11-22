@@ -6,6 +6,8 @@ import logging
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,16 @@ class FPLClient:
     def __init__(self, session: requests.Session | None = None) -> None:
         self.session = session or requests.Session()
         self.session.headers.update({"User-Agent": self._BROWSER_UA})
+        # Retry transient failures (FPL returns 5xx/429 around deadlines).
+        retry = Retry(
+            total=4, backoff_factor=1.0,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset({"GET"}),
+        )
+        if hasattr(self.session, "mount"):
+            adapter = HTTPAdapter(max_retries=retry, pool_maxsize=16)
+            self.session.mount("https://", adapter)
+        self.authenticated = False
 
     # -- Authentication -------------------------------------------------------
 
@@ -73,6 +85,7 @@ class FPLClient:
                 "Login failed — pl_profile cookie not set. "
                 "Check your FPL_EMAIL and FPL_PASSWORD."
             )
+        self.authenticated = True
         logger.info("Authenticated with FPL successfully.")
 
     # -- Public endpoints -----------------------------------------------------
@@ -98,6 +111,10 @@ class FPLClient:
     def get_my_team(self, manager_id: int) -> dict[str, Any]:
         """Return the current squad for *manager_id* (requires login)."""
         return self._get(f"/my-team/{manager_id}/")
+
+    def get_entry(self, manager_id: int) -> dict[str, Any]:
+        """Return public profile for *manager_id* (team name, rank, leagues)."""
+        return self._get(f"/entry/{manager_id}/")
 
     def get_manager_history(self, manager_id: int) -> dict[str, Any]:
         """Return overall season history for *manager_id*."""

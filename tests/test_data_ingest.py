@@ -125,6 +125,7 @@ PLAYER_SUMMARY_RESPONSE = {
     "history": [
         {
             "element": 1,
+            "fixture": 101,
             "round": 1,
             "opponent_team": 5,
             "total_points": 12,
