@@ -331,7 +331,8 @@ class FPLStore:
         ft = compute_free_transfers(current, chips, max_ft=self.max_free_transfers())
         notes.append(
             "Logged out: free transfers and selling prices were reconstructed from public "
-            "data. Transfers already made for the next deadline are not visible."
+            "data. Transfers already made for the next deadline are not visible. Set "
+            "FPL_REFRESH_TOKEN to log in (see README → Logging in)."
         )
         return ManagerState(
             squad=squad, selling_prices=sell, bank=bank,

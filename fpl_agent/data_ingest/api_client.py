@@ -9,20 +9,18 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .auth import AUTH_HEADER, FPLAuthError, TokenStore, refresh_access_token  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://fantasy.premierleague.com/api"
-
-
-class FPLAuthError(RuntimeError):
-    """Raised when FPL login fails (bad credentials or missing cookies)."""
 
 
 class FPLClient:
     """Thin wrapper around the FPL REST API.
 
     Supports both public endpoints (bootstrap-static, fixtures) and
-    authenticated endpoints (my-team, transfers) via session cookies.
+    authenticated endpoints (my-team) via an OAuth bearer token.
     """
 
     _BROWSER_UA = (
@@ -47,44 +45,13 @@ class FPLClient:
 
     # -- Authentication -------------------------------------------------------
 
-    def login(self, email: str, password: str) -> None:
-        """Authenticate with the FPL website to access manager-specific data.
+    def login(self, refresh_token: str | None, store: TokenStore | None = None) -> None:
+        """Authenticate with an FPL refresh token (see ``auth``).
 
-        Raises ``FPLAuthError`` if the ``pl_profile`` cookie is not set
-        after login (indicates bad credentials or a server-side change).
+        Raises ``FPLAuthError`` when no token works.
         """
-        # Seed the session with any prerequisite cookies from the FPL site.
-        self.session.get("https://fantasy.premierleague.com/", timeout=15)
-
-        login_url = "https://users.premierleague.com/accounts/login/"
-        payload = {
-            "login": email,
-            "password": password,
-            "redirect_uri": "https://fantasy.premierleague.com/",
-            "app": "plfpl-web",
-        }
-        login_headers = {
-            "origin": "https://fantasy.premierleague.com",
-            "referer": "https://fantasy.premierleague.com/my-team",
-            "content-type": "application/x-www-form-urlencoded",
-            "accept": (
-                "text/html,application/xhtml+xml,application/xml;"
-                "q=0.9,image/webp,*/*;q=0.8"
-            ),
-        }
-        resp = self.session.post(
-            login_url, data=payload, headers=login_headers, timeout=15,
-        )
-        resp.raise_for_status()
-
-        # The server returns 200 even on bad credentials; the only reliable
-        # signal is the presence of the pl_profile cookie.
-        cookie_names = {c.name for c in self.session.cookies}
-        if "pl_profile" not in cookie_names:
-            raise FPLAuthError(
-                "Login failed — pl_profile cookie not set. "
-                "Check your FPL_EMAIL and FPL_PASSWORD."
-            )
+        access = refresh_access_token(self.session, refresh_token, store)
+        self.session.headers[AUTH_HEADER] = f"Bearer {access}"
         self.authenticated = True
         logger.info("Authenticated with FPL successfully.")
 

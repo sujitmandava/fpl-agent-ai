@@ -42,8 +42,7 @@ def load_setup(manager_id: int, force: bool = False) -> engine.Setup | None:
         with st.spinner("Refreshing FPL data and your team…"):
             try:
                 ss.setup = engine.sync_setup(DB, MEMORY, manager_id,
-                                             os.environ.get("FPL_EMAIL") or None,
-                                             os.environ.get("FPL_PASSWORD") or None)
+                                             os.environ.get("FPL_REFRESH_TOKEN") or None)
                 ss.setup_for = manager_id
             except EngineError as exc:
                 st.error(str(exc))
@@ -459,12 +458,46 @@ with tab_mem:
 
 # -- Model check --------------------------------------------------------------
 
+HOW_IT_WORKS = """
+**1. Team strength.** Every team gets an attack and a defence rating from this season's
+matches (70% xG, 30% actual goals, recent games count more, adjusted for who they played).
+That gives expected goals for and against in every upcoming fixture.
+
+**2. Each player's habits.** From recent matches: how likely he is to play and to play 60+
+minutes, his xG and xA per 90, how often he earns defensive-contribution points, plus
+saves, bonus and cards. Players with few minutes are pulled toward their position's
+average, so one lucky cameo doesn't make a star.
+
+**3. Points per fixture.** Habits × fixture: xG/90 scaled by the minutes he'll play and how
+leaky the opponent is, times the points a goal is worth for his position; the same for
+assists; clean-sheet and goals-conceded odds from the goals his team is expected to
+concede; and so on for every scoring rule. Injury flags cut the next gameweek and fade
+over four. Blanks score 0 and doubles add up.
+
+**4. The plan.** An optimiser picks the squad, XI and captain for every gameweek in the
+horizon to maximise those points, within budget, formation and 3-per-club rules. A
+transfer has to beat the value of saving it, and a hit has to beat 4 points plus that.
+"""
+
+
+def _pct(a: float, b: float) -> str:
+    return f"{abs(1 - a / b):.0%}" if b else "—"
+
+
 with tab_model:
-    st.write("Fit the model on data up to an earlier gameweek, predict what came next, and compare "
-             "with a points-per-game baseline.")
-    bh = st.slider("Predict this many GWs ahead", 1, 6, 3)
-    if st.button("Run backtest"):
-        from fpl_agent.forecast.backtest import backtest
+    with st.expander("How the model works", expanded=False):
+        st.markdown(HOW_IT_WORKS)
+
+    st.subheader("Has the model been right?")
+    st.write("This replays the season. It pretends it's an earlier gameweek, hides everything "
+             "after it, asks the model to predict the next few gameweeks, then checks what "
+             "actually happened. As a yardstick it does the same with the simplest possible "
+             "guess: *each player scores his average so far*.")
+    bh = st.slider("Predict this many gameweeks ahead", 1, 6, 3,
+                   help="Further ahead is harder; 1 is the next deadline only.")
+    bt_key = (bh, setup.planning_gw)
+    if st.button("Run backtest", type="primary"):
+        from fpl_agent.forecast.backtest import backtest_predictions
 
         done = setup.fixtures[setup.fixtures["finished"].fillna(0).astype(bool)]
         last_done = int(done["event"].max()) if not done.empty else 0
@@ -472,9 +505,79 @@ with tab_model:
         if not cutoffs:
             st.warning("Not enough completed gameweeks yet.")
         else:
-            with st.spinner("Backtesting…"):
-                res = backtest(setup.players, setup.history, setup.fixtures, setup.teams,
-                               setup.scoring, cutoffs, bh)
-            st.dataframe(res, hide_index=True, width="stretch")
-            st.caption(f"Cutoffs GW{cutoffs[0]}–{cutoffs[-1]}. Lower MAE and higher correlation are "
-                       "better. topN_actual_avg = real average score of the model's top picks.")
+            with st.spinner("Replaying past gameweeks…"):
+                ss.bt = (bt_key, backtest_predictions(
+                    setup.players, setup.history, setup.fixtures, setup.teams,
+                    setup.scoring, cutoffs, bh))
+
+    if ss.get("bt") and ss.bt[0] == bt_key and not ss.bt[1].empty:
+        from fpl_agent.forecast.backtest import by_window, calibration, summarise, top_picks_avg
+
+        d = ss.bt[1]
+        m = summarise(d).set_index("model")
+        mae_m, mae_b = m.at["xpts", "mae"], m.at["ppg_baseline", "mae"]
+        top_m, top_b = top_picks_avg(d, "xpts"), top_picks_avg(d, "ppg_baseline")
+        hindsight = top_picks_avg(d, "actual")
+        avg_player = float(d["actual"].mean())
+        bias = m.at["xpts", "bias"]
+        n_gws = d["gw"].nunique()
+
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Typical miss per player, per week", f"{mae_m:.1f} pts",
+                  f"{mae_m - mae_b:+.1f} vs. average-so-far guess", delta_color="inverse",
+                  help="Average gap between predicted and actual points (MAE). Lower is better.")
+        k2.metric("Model's top 20 picks scored", f"{top_m:.1f} pts each",
+                  f"{top_m - top_b:+.1f} vs. average-so-far picks",
+                  help="Each week, take the 20 players the model rated highest and average "
+                       "what they really scored. This is what matters for picking a team.")
+        k3.metric("Leaning", "about right" if abs(bias) < 0.25 else
+                  ("too optimistic" if bias > 0 else "too cautious"),
+                  f"{bias:+.1f} pts per prediction", delta_color="off",
+                  help="Average of predicted minus actual. Positive = predicts too high.")
+
+        better = mae_m < mae_b and top_m > top_b
+        st.markdown(
+            f"{'✅' if better else '⚠️'} Over **{len(d):,} predictions** across **{n_gws} gameweeks**, "
+            f"the model missed by **{mae_m:.1f} pts** on a typical player-week, "
+            f"{_pct(mae_m, mae_b)} {'less' if mae_m < mae_b else 'more'} than the "
+            f"average-so-far guess ({mae_b:.1f}). If you had picked its top 20 every week, they'd "
+            f"have averaged **{top_m:.1f} pts**, against **{top_b:.1f}** for the guess's top 20, "
+            f"**{avg_player:.1f}** for a typical regular, and **{hindsight:.1f}** with perfect "
+            f"hindsight.")
+
+        left, right = st.columns([1, 1])
+        with left:
+            st.markdown("**When the model says X, what did players actually score?**")
+            cal = calibration(d)
+            st.bar_chart(cal[["predicted", "actual"]].rename(
+                columns={"predicted": "Model predicted", "actual": "Actually scored"}),
+                stack=False, y_label="Average points", x_label="Predicted points band",
+                height=300)
+            st.caption("Matching bars mean the forecasts can be taken at face value. "
+                       + ", ".join(f"{b}: {int(c):,}" for b, c in cal["count"].items())
+                       + " predictions per band.")
+        with right:
+            st.markdown("**Window by window**")
+            w = by_window(d)
+            st.dataframe(pd.DataFrame({
+                "Predicting": [f"GW{a}–{b}" if a != b else f"GW{a}"
+                               for a, b in zip(w["first_gw"], w["last_gw"])],
+                "Model miss": w["xpts_mae"], "Guess miss": w["ppg_mae"],
+                "Model top 20": w["xpts_top"], "Guess top 20": w["ppg_top"],
+            }), hide_index=True, width="stretch", column_config={
+                c: st.column_config.NumberColumn(format="%.1f")
+                for c in ("Model miss", "Guess miss", "Model top 20", "Guess top 20")})
+            st.caption("Each row only uses data from before the weeks it predicts. "
+                       "Lower miss and higher top-20 are better.")
+
+        with st.expander("Why is the miss still around 2 points?"):
+            st.write("FPL scores are lumpy: a forward who \"should\" get 5 points gets 2 or 8 "
+                     "depending on one shot. No model gets close to zero, so judge it against "
+                     "the yardstick and on whether its top picks outscore other picks, not on "
+                     "the raw miss. A correlation of 0.3 between predicted and actual points is "
+                     "normal for single gameweeks.")
+        with st.expander("Raw numbers"):
+            st.dataframe(m.reset_index(), hide_index=True, width="stretch")
+            st.caption("mae = average absolute error; correlation = how well predictions rank "
+                       "players (1 = perfectly); bias = predicted − actual on average; "
+                       "top20_actual_avg = real points of the top 20 picks each week.")

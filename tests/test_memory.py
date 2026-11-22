@@ -204,7 +204,7 @@ def test_sync_falls_back_to_memory_when_api_down(tmp_path, monkeypatch):
     down.return_value.authenticated = False
     monkeypatch.setattr(cli_main, "FPLClient", down)
 
-    setup = cli_main.sync_setup(str(db), str(mem_path), 42, None, None)
+    setup = cli_main.sync_setup(str(db), str(mem_path), 42, None)
     assert setup.synced is False
     assert setup.state.source == "memory"
     assert setup.state.bank == 12

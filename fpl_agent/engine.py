@@ -1,6 +1,6 @@
 """The planning engine, shared by the CLI and the web dashboard.
 
-    setup = sync_setup(db, memory_path, manager_id, email, password)
+    setup = sync_setup(db, memory_path, manager_id, refresh_token)
     plan = plan_from_setup(setup, PlanOptions(horizon=6))
 
 ``sync_setup`` refreshes FPL data, loads your team, and updates memory.
@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from fpl_agent.data_ingest import FPLClient, FPLStore
+from fpl_agent.data_ingest.auth import TokenStore
 from fpl_agent.data_ingest.manager import ManagerState, chip_status
 from fpl_agent.data_ingest.models import get_meta
 from fpl_agent.forecast import ExpectedPointsModel
@@ -64,20 +65,21 @@ class Setup:
 
 
 def sync_setup(db: str, memory_path: str, manager_id: int,
-               email: str | None = None, password: str | None = None) -> Setup:
+               refresh_token: str | None = None) -> Setup:
     """Refresh data, load the manager's setup, and update memory.
 
-    Falls back to the cached database and the memory snapshot when the FPL
-    API is unreachable.
+    Logs in with *refresh_token* (or the rotated one saved by an earlier run)
+    when available. Falls back to the cached database and the memory snapshot
+    when the FPL API is unreachable.
     """
     memory = AgentMemory(memory_path)
     client = FPLClient()
     notes: list[str] = []
-    if email and password:
+    if refresh_token or TokenStore().load():
         try:
-            client.login(email, password)
+            client.login(refresh_token)
         except Exception as exc:
-            notes.append(f"Login failed ({exc}); using public endpoints.")
+            notes.append(f"Login failed: {exc}")
 
     store = FPLStore(client=client, db_path=db)
     try:
@@ -217,9 +219,9 @@ def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Pla
                 {"free_transfers": ft_src, "bank": bank_src}, model.ratings, result, baseline)
 
 
-def build_plan(db: str, memory_path: str, manager_id: int, email: str | None,
-               password: str | None, opts: PlanOptions) -> Plan:
-    return plan_from_setup(sync_setup(db, memory_path, manager_id, email, password), opts)
+def build_plan(db: str, memory_path: str, manager_id: int, refresh_token: str | None,
+               opts: PlanOptions) -> Plan:
+    return plan_from_setup(sync_setup(db, memory_path, manager_id, refresh_token), opts)
 
 
 # -- Views shared by CLI and dashboard ----------------------------------------

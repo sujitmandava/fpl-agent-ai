@@ -18,6 +18,10 @@ import logging
 import os
 import subprocess
 import sys
+import threading
+import time
+import urllib.request
+import webbrowser
 from pathlib import Path
 
 import click
@@ -87,8 +91,8 @@ def refresh(ctx: click.Context, top_n: int) -> None:
 _plan_options = [
     click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int, required=True,
                  help="FPL manager ID."),
-    click.option("--email", envvar="FPL_EMAIL", default=None, help="FPL login email."),
-    click.option("--password", envvar="FPL_PASSWORD", default=None, help="FPL login password."),
+    click.option("--refresh-token", envvar="FPL_REFRESH_TOKEN", default=None,
+                 help="FPL login token copied from your browser (see README)."),
     click.option("--horizon", envvar="FPL_HORIZON", type=click.IntRange(1, 8), default=6,
                  show_default=True, help="Forecast horizon in gameweeks."),
     click.option("--free-transfers", envvar="FPL_FREE_TRANSFERS", type=click.IntRange(0, 5),
@@ -111,18 +115,18 @@ def plan_options(f):
 
 
 def sync_setup(db: str, memory_path: str, manager_id: int,
-               email: str | None, password: str | None) -> engine.Setup:
+               refresh_token: str | None) -> engine.Setup:
     with console.status("Refreshing FPL data…"):
-        setup = engine.sync_setup(db, memory_path, manager_id, email, password)
+        setup = engine.sync_setup(db, memory_path, manager_id, refresh_token)
     for note in setup.notes:
         if note.startswith("Login failed"):
             console.print(f"[yellow]{note}[/]")
     return setup
 
 
-def build_plan(db: str, memory_path: str, manager_id: int, email: str | None,
-               password: str | None, **opts) -> Plan:
-    setup = sync_setup(db, memory_path, manager_id, email, password)
+def build_plan(db: str, memory_path: str, manager_id: int, refresh_token: str | None,
+               **opts) -> Plan:
+    setup = sync_setup(db, memory_path, manager_id, refresh_token)
     with console.status("Optimising…"):
         return engine.plan_from_setup(setup, PlanOptions(**opts))
 
@@ -227,16 +231,15 @@ def _print_recommendation(plan: Plan) -> None:
 @cli.command()
 @click.option("--sync", is_flag=True, help="Refresh from the FPL API before showing.")
 @click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int, default=None)
-@click.option("--email", envvar="FPL_EMAIL", default=None)
-@click.option("--password", envvar="FPL_PASSWORD", default=None)
+@click.option("--refresh-token", envvar="FPL_REFRESH_TOKEN", default=None)
 @click.pass_context
 def status(ctx: click.Context, sync: bool, manager_id: int | None,
-           email: str | None, password: str | None) -> None:
+           refresh_token: str | None) -> None:
     """Show what the agent remembers: team, transfers, bank, chips, preferences."""
     if sync:
         if not manager_id:
             raise click.UsageError("--sync needs --manager-id (or FPL_MANAGER_ID).")
-        sync_setup(ctx.obj["db"], ctx.obj["memory"], manager_id, email, password)
+        sync_setup(ctx.obj["db"], ctx.obj["memory"], manager_id, refresh_token)
     _print_memory(AgentMemory(ctx.obj["memory"]))
 
 
@@ -462,6 +465,14 @@ def backtest(ctx: click.Context, horizon: int, windows: int) -> None:
     for r in res.itertuples(index=False):
         t.add_row(*[str(v) for v in r])
     console.print(t)
+    if not res.empty:
+        m = res.set_index("model")
+        mae_m, mae_b = m.at["xpts", "mae"], m.at["ppg_baseline", "mae"]
+        top = [c for c in res.columns if c.startswith("top")][0]
+        console.print(
+            f"Typical miss: [bold]{mae_m:.1f}[/] pts per player-week vs {mae_b:.1f} for "
+            f"'each player scores his average so far'. The model's top picks really scored "
+            f"[bold]{m.at['xpts', top]:.1f}[/] pts each vs {m.at['ppg_baseline', top]:.1f}.")
     console.print("[dim]Lower MAE and higher correlation are better. topN_actual_avg is the real "
                   "average score of the model's top picks each gameweek.[/]")
 
@@ -474,8 +485,22 @@ def ui(ctx: click.Context, port: int) -> None:
     """Open the dashboard (suggestions, team, players, fixtures, memory)."""
     app = Path(__file__).resolve().parents[1] / "ui" / "app.py"
     env = {**os.environ, "FPL_DB": ctx.obj["db"], "FPL_MEMORY": ctx.obj["memory"]}
+    # Headless skips Streamlit's first-run email prompt, which blocks (or exits
+    # without a TTY); open the browser ourselves once the server answers.
     cmd = [sys.executable, "-m", "streamlit", "run", str(app), "--server.port", str(port),
-           "--server.headless", "false", "--browser.gatherUsageStats", "false"]
+           "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    url = f"http://localhost:{port}"
+
+    def open_when_ready() -> None:
+        for _ in range(60):
+            try:
+                urllib.request.urlopen(f"{url}/_stcore/health", timeout=1)
+                webbrowser.open(url)
+                return
+            except OSError:
+                time.sleep(0.5)
+
+    threading.Thread(target=open_when_ready, daemon=True).start()
     try:
         subprocess.run(cmd, env=env, check=False)
     except KeyboardInterrupt:

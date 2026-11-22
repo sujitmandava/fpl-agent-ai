@@ -24,3 +24,7 @@ Thumbs.db
 # Agent memory (personal team data)
 fpl_memory.json
 .fpl_memory.*.tmp
+
+# FPL login token (rotates on every use)
+.fpl_auth.json
+.fpl_auth.tmp

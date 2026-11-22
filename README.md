@@ -28,6 +28,25 @@ pip install -e ".[dev]"
 
 Put `FPL_MANAGER_ID` in `.env` (see `.env.example`).
 
+#### Logging in (optional, recommended)
+
+Without a login the agent rebuilds free transfers and selling prices from
+public data and can't see transfers you've already made this gameweek. FPL
+moved sign-in to `account.premierleague.com`, which blocks scripted
+email/password logins, so the agent uses the token your browser already has:
+
+1. Log in at <https://fantasy.premierleague.com>.
+2. Open DevTools → **Application** → **Local Storage** → `https://fantasy.premierleague.com`.
+3. Click the key starting with `oidc.user:` and copy its whole value (or run
+   `copy(localStorage[Object.keys(localStorage).find(k => k.startsWith('oidc.user:'))])`
+   in the Console).
+4. Paste it into `.env` in single quotes: `FPL_REFRESH_TOKEN='{"id_token":...}'`.
+
+The token rotates on every use. The agent saves the newest one to
+`.fpl_auth.json` (git-ignored, readable only by you), so you paste it once.
+Paste a fresh one if it expires (around 30 days unused) or after logging out
+everywhere. Using it may sign your browser out of FPL; log in there again.
+
 ### 2. Open the dashboard
 
 ```bash
@@ -162,8 +181,8 @@ Tests cover:
 
 | Variable | Description |
 |----------|-------------|
-| `FPL_EMAIL` | FPL account email (alternative to `--email`) |
-| `FPL_PASSWORD` | FPL account password (alternative to `--password`) |
+| `FPL_REFRESH_TOKEN` | FPL login token from your browser (alternative to `--refresh-token`; see Logging in) |
+| `FPL_AUTH_FILE` | Where the rotated token is kept (default `.fpl_auth.json`) |
 | `FPL_MANAGER_ID` | Your FPL manager ID |
 | `FPL_DB` | SQLite cache path (rebuilt automatically on a new season or schema change) |
 | `FPL_MEMORY` | Agent memory file (default `fpl_memory.json`) |
