@@ -1,0 +1,89 @@
+/* Dressing-room tactics board.
+   Wall: cool grey. Board: white melamine in an aluminium frame.
+   Magnets: blue (your players), red (incoming), yellow armband (captain).
+   Marker: near-black strokes, red for moves. */
+
+:root {
+  --wall: #e6e8eb;
+  --wall-deep: #d9dde2;
+  --board: #f7f8fa;
+  --board-line: #cfd4db;
+  --frame: #a3aab3;
+  --frame-light: #c6ccd3;
+  --ink: #15181c;          /* marker black, body text */
+  --ink-2: #4a525c;        /* secondary text on board and wall */
+  --ink-3: #6b737d;        /* tertiary, labels (≥4.5:1 on --board) */
+  --blue: #1d4ed8;         /* your counters */
+  --blue-deep: #1739a8;
+  --red: #c81e1e;          /* incoming counters, move arrows, hits */
+  --red-soft: #fbe4e4;
+  --yellow: #ffd400;       /* captain armband, gains on the plate */
+  --amber: #b45309;        /* injury doubt */
+  --plate: #15181c;        /* the one reversed plate per screen */
+  --plate-2: #262b31;
+  --plate-text: #f3f4f6;
+  --plate-mute: #b7bec7;
+
+  --radius: 10px;
+  --gutter: 16px;
+  --shadow-magnet: 0 2px 3px rgb(21 24 28 / 0.28), 0 1px 0 rgb(21 24 28 / 0.18);
+  --shadow-lift: 0 8px 14px rgb(21 24 28 / 0.24), 0 2px 4px rgb(21 24 28 / 0.2);
+  --shadow-panel: 0 1px 2px rgb(21 24 28 / 0.08), 0 6px 18px rgb(21 24 28 / 0.06);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  /* Declared here, not on :root: next/font defines --font-archivo and
+     --font-marker on <body>, and a custom property resolves where it's declared. */
+  --font-sans: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
+  --font-hand: var(--font-marker), "Marker Felt", cursive;
+  background: var(--wall);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.1; }
+p { text-wrap: pretty; }
+
+a { color: var(--blue-deep); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+::selection { background: var(--yellow); color: var(--ink); }
+input { caret-color: var(--red); }
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+* { scrollbar-width: thin; scrollbar-color: var(--frame) transparent; }
+
+/* Condensed figures: names on counters, gains, the one display figure. */
+.cond { font-stretch: 72%; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

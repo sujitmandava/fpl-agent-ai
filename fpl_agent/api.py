@@ -47,6 +47,10 @@ app.add_middleware(
 _setups: OrderedDict[tuple[int, int | None], tuple[float, Setup]] = OrderedDict()
 _setups_lock = threading.Lock()
 _model_check: dict[int, tuple[float, dict]] = {}
+# Finished payloads keyed by team + every option, tied to the Setup they came from,
+# so a reload or a repeat request is instant and a fresh sync invalidates them.
+_plans: OrderedDict[tuple, tuple[Setup, dict]] = OrderedDict()
+PLAN_CACHE_SIZE = 512
 
 
 def _setup(team_id: int, league_id: int | None, fresh: bool = False) -> Setup:
@@ -259,8 +263,15 @@ def team_plan(
 ) -> dict:
     if team_id <= 0:
         raise HTTPException(400, "Team IDs are positive numbers.")
+    key = (team_id, horizon, chip, free_transfers, bank, ft_value, bench_weight, consistency,
+           league, rival, _ids(locked), _ids(banned))
     try:
         setup = _setup(team_id, league, fresh)
+        with _setups_lock:
+            hit = _plans.get(key)
+            if hit and hit[0] is setup:
+                _plans.move_to_end(key)
+                return hit[1]
         plan = engine.plan_from_setup(setup, PlanOptions(
             horizon=horizon, free_transfers=free_transfers, bank=bank,
             wildcard=chip == "wildcard", free_hit=chip == "freehit",
@@ -270,7 +281,13 @@ def team_plan(
     except EngineError as exc:
         status = 404 if "No FPL team found" in str(exc) else 422
         raise HTTPException(status, str(exc)) from exc
-    return plan_payload(plan, rival)
+    payload = plan_payload(plan, rival)
+    with _setups_lock:
+        _plans[key] = (setup, payload)
+        _plans.move_to_end(key)
+        while len(_plans) > PLAN_CACHE_SIZE:
+            _plans.popitem(last=False)
+    return payload
 
 
 @app.get("/api/model-check")

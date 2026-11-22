@@ -1,0 +1,20 @@
+.wrap {
+  max-width: 640px;
+  padding: 32px var(--gutter);
+  display: grid;
+  gap: 12px;
+}
+
+.wrap h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.01em; }
+
+.wrap p { color: var(--ink-2); max-width: 60ch; }
+
+.note { font-size: 14px; }
+
+.note code {
+  font-size: 13px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--board);
+  border: 1px solid var(--board-line);
+}
