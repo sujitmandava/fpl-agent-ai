@@ -1,7 +1,11 @@
 """FPL Agent dashboard (Streamlit).
 
 Run with ``python fpl_agent.py ui`` (or ``streamlit run fpl_agent/ui/app.py``).
-Reads the same .env, database and memory file as the CLI.
+
+Anyone can use it: the landing screen asks for an FPL team ID, and everything
+comes from FPL's public API. The ID lives in the URL (``?team=123456``), so a
+plan can be bookmarked or shared. Player data is cached once for all users;
+each team gets its own memory file under FPL_MEMORY_DIR.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ from fpl_agent.engine import POS, EngineError, PlanOptions  # noqa: E402
 
 load_dotenv(ROOT / ".env")
 DB = os.environ.get("FPL_DB", "fpl_agent.db")
-MEMORY = os.environ.get("FPL_MEMORY", "fpl_memory.json")
+MEMORY_DIR = os.environ.get("FPL_MEMORY_DIR", engine.DEFAULT_MEMORY_DIR)
 
 st.set_page_config(page_title="FPL Agent", page_icon="⚽", layout="wide")
 ss = st.session_state
@@ -35,18 +39,70 @@ def money(v) -> str:
     return f"£{v / 10:.1f}m" if v else "—"
 
 
-# -- State --------------------------------------------------------------------
+# -- Landing ------------------------------------------------------------------
 
-def load_setup(manager_id: int, force: bool = False) -> engine.Setup | None:
-    if force or ss.get("setup_for") != manager_id:
-        with st.spinner("Refreshing FPL data and your team…"):
+def team_from_url() -> int | None:
+    raw = st.query_params.get("team")
+    if not raw:
+        return None
+    try:
+        return engine.parse_manager_id(raw)
+    except EngineError:
+        return None
+
+
+def open_team(manager_id: int) -> None:
+    st.query_params["team"] = str(manager_id)
+    for key in ("setup", "setup_for", "plan", "plan_key", "bt"):
+        ss.pop(key, None)
+
+
+def landing(error: str | None = None) -> None:
+    """Ask for a team ID, then reload with ?team=<id>. Never returns."""
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        st.title("FPL Agent")
+        st.markdown("#### Transfers, captain and chips for your Fantasy Premier League team, "
+                    "worked out from the underlying stats.")
+        st.write("Enter your team ID to get a plan for the next deadline: who to sell and buy, "
+                 "your best XI and captain, when to play your chips, and how you stack up "
+                 "against your mini-league. No login, and it never changes your team.")
+        if error:
+            st.error(error)
+        with st.form("team"):
+            raw = st.text_input("Your FPL team ID", value=str(engine.manager_id_from_env() or ""),
+                                placeholder="e.g. 1234567, or paste your Points page link")
+            go = st.form_submit_button("Get my plan", type="primary", width="stretch")
+        if go:
             try:
-                ss.setup = engine.sync_setup(DB, MEMORY, manager_id,
-                                             os.environ.get("FPL_REFRESH_TOKEN") or None)
-                ss.setup_for = manager_id
+                open_team(engine.parse_manager_id(raw))
+                st.rerun()
             except EngineError as exc:
                 st.error(str(exc))
-                return None
+        with st.expander("Where do I find my team ID?"):
+            st.markdown(
+                "1. Go to [fantasy.premierleague.com](https://fantasy.premierleague.com) and sign in.\n"
+                "2. Open the **Points** tab.\n"
+                "3. The address bar shows `…/entry/1234567/event/12`. The number after "
+                "`entry/` is your team ID.\n\n"
+                "You can paste the whole link here.")
+        st.caption("Uses public FPL data only. Not affiliated with the Premier League.")
+    st.stop()
+
+
+# -- State --------------------------------------------------------------------
+
+def load_setup(manager_id: int, force: bool = False) -> engine.Setup:
+    """Sync the team (once per session unless forced); back to the landing screen on failure."""
+    if force or ss.get("setup_for") != manager_id:
+        with st.spinner("Loading your team and the latest FPL data…"):
+            try:
+                ss.setup = engine.sync_setup(DB, engine.memory_path(MEMORY_DIR, manager_id),
+                                             manager_id, force_refresh=force)
+                ss.setup_for = manager_id
+            except EngineError as exc:
+                st.query_params.clear()
+                landing(str(exc))
         ss.pop("plan_key", None)
     return ss.setup
 
@@ -68,18 +124,22 @@ def get_plan(setup: engine.Setup, opts: PlanOptions):
 
 # -- Sidebar ------------------------------------------------------------------
 
+manager_id = team_from_url()
+if manager_id is None:
+    landing()
+
+# Load before drawing the sidebar, so a failed load shows a clean landing screen.
+setup = load_setup(manager_id, force=ss.pop("force_refresh", False))
 st.sidebar.title("FPL Agent")
-default_id = engine.manager_id_from_env()
-manager_id = st.sidebar.number_input("Manager ID", min_value=0, value=default_id, step=1)
-refresh = st.sidebar.button("Refresh from FPL", width="stretch")
-
-if not manager_id:
-    st.info("Enter your FPL manager ID in the sidebar (or set FPL_MANAGER_ID in .env).")
-    st.stop()
-
-setup = load_setup(int(manager_id), force=refresh)
-if setup is None:
-    st.stop()
+st.sidebar.button("Refresh from FPL", width="stretch",
+                  on_click=lambda: ss.update(force_refresh=True))
+_team_name = setup.memory.data.get("manager", {}).get("team_name") or "Your team"
+st.sidebar.caption(f"{_team_name} · ID {manager_id}")
+if st.sidebar.button("Switch team", width="stretch"):
+    st.query_params.clear()
+    for key in ("setup", "setup_for", "plan", "plan_key", "bt"):
+        ss.pop(key, None)
+    st.rerun()
 
 st.sidebar.subheader("Plan options")
 horizon = st.sidebar.slider("Horizon (gameweeks)", 1, 8, int(os.environ.get("FPL_HORIZON", 6)))
@@ -283,7 +343,7 @@ with tab_plan:
 
 with tab_league:
     if league is None:
-        st.info("No mini-league loaded. Join a private league, or set FPL_LEAGUE_ID in .env, "
+        st.info("This team isn't in a private classic league yet. Join one on the FPL site, "
                 "then Refresh from FPL.")
     else:
         me = league.mine
@@ -541,8 +601,9 @@ with tab_mem:
     gw = setup.planning_gw
     ov = m.active_overrides(gw)
     st.subheader(f"Overrides for GW{gw}")
-    st.caption("Use these when the API can't see something (e.g. a transfer you already made while "
-               "logged out). They expire after the deadline.")
+    st.caption("Free transfers and bank are worked out from public data, which can't see "
+               "transfers you've already made for the next deadline. If you've made some, set "
+               "the numbers here. They expire after the deadline.")
     o1, o2, o3 = st.columns(3)
     with o1.form("ft"):
         ft_new = st.number_input("Free transfers", 0, 5, int(ov.get("free_transfers", m.data.get("free_transfers") or 1)))
@@ -600,7 +661,8 @@ with tab_mem:
             m.add_note(text.strip())
             m.save()
             st.rerun()
-    st.caption(f"Memory file: {m.path.resolve()}")
+    st.caption(f"Saved for team ID {manager_id}. There's no login, so anyone who opens this "
+               "team ID sees and can change these settings.")
 
 
 # -- Model check --------------------------------------------------------------

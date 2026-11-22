@@ -21,11 +21,12 @@ Thumbs.db
 .pytest_cache/
 .env
 
-# Agent memory (personal team data)
+# Agent memory (one file per team: memory/<team id>.json)
+memory/
 fpl_memory.json
 .fpl_memory.*.tmp
 
-# FPL login token (rotates on every use)
+# Old FPL login token (no longer used; keep it out of git)
 .fpl_auth.json
 .fpl_auth.tmp
 

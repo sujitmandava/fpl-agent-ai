@@ -4,13 +4,15 @@ All options read from a .env file (or exported environment variables)
 so you can simply run:
 
     python fpl_agent.py ui               # open the dashboard in your browser
-    python fpl_agent.py recommend        # plan transfers, lineup, captain, chips
-    python fpl_agent.py status           # what the agent remembers about your team
+    python fpl_agent.py recommend -m ID  # plan transfers, lineup, captain, chips
+    python fpl_agent.py status -m ID     # what the agent remembers about a team
     python fpl_agent.py memory --help    # overrides, locked/banned players, notes
     python fpl_agent.py backtest         # check forecast accuracy on past gameweeks
     python fpl_agent.py hypotheses       # re-test open hypotheses (run after each gameweek)
 
-Command-line flags override memory, which overrides values read from the API.
+ID is your FPL team ID (the number in your Points page link); set FPL_MANAGER_ID
+to skip typing it. Command-line flags override memory, which overrides values
+read from the public API.
 """
 
 from __future__ import annotations
@@ -58,17 +60,26 @@ class _Group(click.Group):
 @click.group(cls=_Group)
 @click.option("--db", envvar="FPL_DB", default="fpl_agent.db", show_default=True,
               help="Path to SQLite cache.")
-@click.option("--memory", "memory_path", envvar="FPL_MEMORY", default="fpl_memory.json",
-              show_default=True, help="Path to the agent's memory file.")
+@click.option("--memory-dir", envvar="FPL_MEMORY_DIR", default=engine.DEFAULT_MEMORY_DIR,
+              show_default=True, help="Folder for per-team memory files (<team id>.json).")
 @click.option("-v", "--verbose", is_flag=True, help="Enable debug logging.")
 @click.pass_context
-def cli(ctx: click.Context, db: str, memory_path: str, verbose: bool) -> None:
+def cli(ctx: click.Context, db: str, memory_dir: str, verbose: bool) -> None:
     """FPL Agent AI – agentic Fantasy Premier League assistant."""
     level = logging.DEBUG if verbose else logging.WARNING
     logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
     ctx.ensure_object(dict)
     ctx.obj["db"] = db
-    ctx.obj["memory"] = memory_path
+    ctx.obj["memory_dir"] = memory_dir
+
+
+_manager_id_option = click.option(
+    "-m", "--manager-id", envvar="FPL_MANAGER_ID", type=click.IntRange(min=1), required=True,
+    help="Your FPL team ID: the number in your Points page link (or set FPL_MANAGER_ID).")
+
+
+def _memory(ctx: click.Context, manager_id: int) -> AgentMemory:
+    return AgentMemory(engine.memory_path(ctx.obj["memory_dir"], manager_id))
 
 
 # -- refresh ------------------------------------------------------------------
@@ -91,10 +102,7 @@ def refresh(ctx: click.Context, top_n: int) -> None:
 # -- plan ---------------------------------------------------------------------
 
 _plan_options = [
-    click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int,
-                 default=engine.DEFAULT_MANAGER_ID, show_default=True, help="FPL manager ID."),
-    click.option("--refresh-token", envvar="FPL_REFRESH_TOKEN", default=None,
-                 help="FPL login token copied from your browser (see README)."),
+    _manager_id_option,
     click.option("--horizon", envvar="FPL_HORIZON", type=click.IntRange(1, 8), default=6,
                  show_default=True, help="Forecast horizon in gameweeks."),
     click.option("--free-transfers", envvar="FPL_FREE_TRANSFERS", type=click.IntRange(0, 5),
@@ -118,19 +126,14 @@ def plan_options(f):
     return f
 
 
-def sync_setup(db: str, memory_path: str, manager_id: int,
-               refresh_token: str | None) -> engine.Setup:
+def sync_setup(ctx: click.Context, manager_id: int) -> engine.Setup:
     with console.status("Refreshing FPL data…"):
-        setup = engine.sync_setup(db, memory_path, manager_id, refresh_token)
-    for note in setup.notes:
-        if note.startswith("Login failed"):
-            console.print(f"[yellow]{note}[/]")
-    return setup
+        return engine.sync_setup(ctx.obj["db"], engine.memory_path(ctx.obj["memory_dir"], manager_id),
+                                 manager_id)
 
 
-def build_plan(db: str, memory_path: str, manager_id: int, refresh_token: str | None,
-               **opts) -> Plan:
-    setup = sync_setup(db, memory_path, manager_id, refresh_token)
+def build_plan(ctx: click.Context, manager_id: int, **opts) -> Plan:
+    setup = sync_setup(ctx, manager_id)
     with console.status("Optimising…"):
         return engine.plan_from_setup(setup, PlanOptions(**opts))
 
@@ -141,7 +144,7 @@ def build_plan(db: str, memory_path: str, manager_id: int, refresh_token: str | 
 @click.pass_context
 def recommend(ctx: click.Context, **kwargs) -> None:
     """Generate transfer, lineup, captain and chip recommendations."""
-    plan = build_plan(ctx.obj["db"], ctx.obj["memory"], **kwargs)
+    plan = build_plan(ctx, **kwargs)
     _print_header(plan)
     _print_recommendation(plan)
 
@@ -251,8 +254,7 @@ def league(ctx: click.Context, league_id: int | None, rival: str | None, **kwarg
     """Mini-league standings, rivals' chips and captains, and you vs a rival."""
     from fpl_agent.league import head_to_head, league_ownership
 
-    setup = sync_setup(ctx.obj["db"], ctx.obj["memory"], kwargs.pop("manager_id"),
-                       kwargs.pop("refresh_token"))
+    setup = sync_setup(ctx, kwargs.pop("manager_id"))
     if league_id and (setup.league is None or setup.league.league_id != league_id):
         engine.load_league(setup, league_id)
     lg = setup.league
@@ -312,18 +314,13 @@ def league(ctx: click.Context, league_id: int | None, rival: str | None, **kwarg
 
 @cli.command()
 @click.option("--sync", is_flag=True, help="Refresh from the FPL API before showing.")
-@click.option("--manager-id", envvar="FPL_MANAGER_ID", type=int,
-              default=engine.DEFAULT_MANAGER_ID, show_default=True)
-@click.option("--refresh-token", envvar="FPL_REFRESH_TOKEN", default=None)
+@_manager_id_option
 @click.pass_context
-def status(ctx: click.Context, sync: bool, manager_id: int | None,
-           refresh_token: str | None) -> None:
+def status(ctx: click.Context, sync: bool, manager_id: int) -> None:
     """Show what the agent remembers: team, transfers, bank, chips, preferences."""
     if sync:
-        if not manager_id:
-            raise click.UsageError("--sync needs --manager-id (or FPL_MANAGER_ID).")
-        sync_setup(ctx.obj["db"], ctx.obj["memory"], manager_id, refresh_token)
-    _print_memory(AgentMemory(ctx.obj["memory"]))
+        sync_setup(ctx, manager_id)
+    _print_memory(_memory(ctx, manager_id))
 
 
 def _print_memory(memory: AgentMemory) -> None:
@@ -383,8 +380,11 @@ def _print_memory(memory: AgentMemory) -> None:
 
 
 @cli.group()
-def memory() -> None:
-    """Edit what the agent remembers (overrides, locked/banned players, notes)."""
+@_manager_id_option
+@click.pass_context
+def memory(ctx: click.Context, manager_id: int) -> None:
+    """Edit what the agent remembers about a team (overrides, locked/banned players, notes)."""
+    ctx.obj["manager_id"] = manager_id
 
 
 def _load_players(ctx) -> pd.DataFrame:
@@ -420,7 +420,7 @@ def _planning_gw(mem: AgentMemory, ctx) -> int:
 @click.pass_context
 def memory_set_ft(ctx, count: int, reason: str) -> None:
     """Remember free transfers for the next deadline (expires after it)."""
-    mem = AgentMemory(ctx.obj["memory"])
+    mem = _memory(ctx, ctx.obj["manager_id"])
     gw = _planning_gw(mem, ctx)
     mem.set_override("free_transfers", count, gw, reason)
     mem.save()
@@ -433,7 +433,7 @@ def memory_set_ft(ctx, count: int, reason: str) -> None:
 @click.pass_context
 def memory_set_bank(ctx, amount: float, reason: str) -> None:
     """Remember the bank (in £m) for the next deadline (expires after it)."""
-    mem = AgentMemory(ctx.obj["memory"])
+    mem = _memory(ctx, ctx.obj["manager_id"])
     gw = _planning_gw(mem, ctx)
     mem.set_override("bank", int(round(amount * 10)), gw, reason)
     mem.save()
@@ -444,7 +444,7 @@ def memory_set_bank(ctx, amount: float, reason: str) -> None:
 @click.pass_context
 def memory_clear_overrides(ctx) -> None:
     """Forget free-transfer and bank overrides."""
-    mem = AgentMemory(ctx.obj["memory"])
+    mem = _memory(ctx, ctx.obj["manager_id"])
     mem.clear_overrides()
     mem.save()
     console.print("Overrides cleared.")
@@ -475,7 +475,7 @@ def memory_unlock(ctx, players: tuple[str, ...]) -> None:
 
 
 def _set_pref(ctx, queries: tuple[str, ...], action: str) -> None:
-    mem = AgentMemory(ctx.obj["memory"])
+    mem = _memory(ctx, ctx.obj["manager_id"])
     players = _load_players(ctx)
     for q in queries:
         pid, name = find_player(players, q)
@@ -496,7 +496,7 @@ def _set_pref(ctx, queries: tuple[str, ...], action: str) -> None:
 @click.pass_context
 def memory_note(ctx, text: str | None, remove: int | None) -> None:
     """Add a free-text note (e.g. 'Saving Free Hit for the GW blank')."""
-    mem = AgentMemory(ctx.obj["memory"])
+    mem = _memory(ctx, ctx.obj["manager_id"])
     if remove is not None:
         try:
             gone = mem.remove_note(remove)
@@ -515,7 +515,7 @@ def memory_note(ctx, text: str | None, remove: int | None) -> None:
 @click.pass_context
 def memory_show(ctx) -> None:
     """Same as `status` (no sync)."""
-    _print_memory(AgentMemory(ctx.obj["memory"]))
+    _print_memory(_memory(ctx, ctx.obj["manager_id"]))
 
 
 # -- backtest -----------------------------------------------------------------
@@ -625,7 +625,7 @@ def hypotheses(ctx: click.Context, log_path: str | None) -> None:
 def ui(ctx: click.Context, port: int) -> None:
     """Open the dashboard (suggestions, team, players, fixtures, memory)."""
     app = Path(__file__).resolve().parents[1] / "ui" / "app.py"
-    env = {**os.environ, "FPL_DB": ctx.obj["db"], "FPL_MEMORY": ctx.obj["memory"]}
+    env = {**os.environ, "FPL_DB": ctx.obj["db"], "FPL_MEMORY_DIR": ctx.obj["memory_dir"]}
     # Headless skips Streamlit's first-run email prompt, which blocks (or exits
     # without a TTY); open the browser ourselves once the server answers.
     cmd = [sys.executable, "-m", "streamlit", "run", str(app), "--server.port", str(port),

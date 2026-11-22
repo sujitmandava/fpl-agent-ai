@@ -1,9 +1,12 @@
 """The planning engine, shared by the CLI and the web dashboard.
 
-    setup = sync_setup(db, memory_path, manager_id, refresh_token)
+    setup = sync_setup(db, memory_path(memory_dir, manager_id), manager_id)
     plan = plan_from_setup(setup, PlanOptions(horizon=6))
 
-``sync_setup`` refreshes FPL data, loads your team, and updates memory.
+Everything comes from FPL's public API: no login, so any manager ID works.
+Player and fixture data is shared by every user; each manager gets their own
+memory file. ``sync_setup`` refreshes FPL data, loads the team, and updates
+memory.
 ``plan_from_setup`` forecasts and optimises; it can be re-run with different
 options without hitting the API again. ``build_plan`` does both.
 
@@ -14,13 +17,16 @@ override, then the API value.
 from __future__ import annotations
 
 import os
+import re
+import threading
 import unicodedata
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pandas as pd
+import requests
 
 from fpl_agent.data_ingest import FPLClient, FPLStore
-from fpl_agent.data_ingest.auth import TokenStore
 from fpl_agent.data_ingest.manager import ManagerState, chip_status
 from fpl_agent.data_ingest.models import get_meta
 from fpl_agent.forecast import ExpectedPointsModel
@@ -34,16 +40,37 @@ from fpl_agent.planner.chips import chip_outlook, fixture_calendar
 from fpl_agent.planner.recommend import Recommendation
 
 POS = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
-# Your FPL team ID; FPL_MANAGER_ID or --manager-id override it.
-DEFAULT_MANAGER_ID = 7588693
-
-
-def manager_id_from_env() -> int:
-    return int(os.environ.get("FPL_MANAGER_ID") or DEFAULT_MANAGER_ID)
+DEFAULT_MEMORY_DIR = "memory"
+# Players and fixtures are shared, so one user's refresh serves everyone for this long.
+BOOTSTRAP_MAX_AGE_SECONDS = 5 * 60
+# Several dashboard sessions can sync at once; only one refreshes the shared cache.
+_refresh_lock = threading.Lock()
 
 
 class EngineError(Exception):
     """A problem the user can act on (no data, chip unavailable, solver failure)."""
+
+
+def manager_id_from_env() -> int | None:
+    """FPL_MANAGER_ID if set (handy for the CLI), else None."""
+    value = os.environ.get("FPL_MANAGER_ID", "").strip()
+    return int(value) if value.isdigit() and int(value) > 0 else None
+
+
+def parse_manager_id(text: str) -> int:
+    """Read a team ID from what a user typed: '123456' or any FPL URL with
+    ``/entry/123456/`` in it (e.g. the Points page)."""
+    text = str(text).strip()
+    match = re.search(r"/entry/(\d+)", text) or re.fullmatch(r"#?(\d+)", text)
+    if not match or int(match.group(1)) <= 0:
+        raise EngineError("That doesn't look like a team ID. It's the number in your "
+                          "Points page link: fantasy.premierleague.com/entry/<ID>/event/…")
+    return int(match.group(1))
+
+
+def memory_path(memory_dir: str | Path, manager_id: int) -> Path:
+    """Each manager's memory file: ``<memory_dir>/<manager_id>.json``."""
+    return Path(memory_dir) / f"{int(manager_id)}.json"
 
 
 # -- Setup --------------------------------------------------------------------
@@ -79,43 +106,50 @@ class Setup:
         return any(c["name"] == name and c["status"] == "available" for c in self.chips)
 
 
-def sync_setup(db: str, memory_path: str, manager_id: int,
-               refresh_token: str | None = None) -> Setup:
-    """Refresh data, load the manager's setup, and update memory.
+def _is_not_found(exc: Exception) -> bool:
+    resp = getattr(exc, "response", None)
+    return isinstance(exc, requests.HTTPError) and resp is not None and resp.status_code == 404
 
-    Logs in with *refresh_token* (or the rotated one saved by an earlier run)
-    when available. Falls back to the cached database and the memory snapshot
-    when the FPL API is unreachable.
+
+def sync_setup(db: str, memory_file: str | Path, manager_id: int,
+               force_refresh: bool = False) -> Setup:
+    """Refresh shared data if it's stale, load the manager's team from public
+    endpoints, and update their memory.
+
+    Falls back to the cached database and the memory snapshot when the FPL API
+    is unreachable. Raises EngineError if the team doesn't exist.
     """
-    memory = AgentMemory(memory_path)
+    memory = AgentMemory(memory_file)
     client = FPLClient()
     notes: list[str] = []
-    if refresh_token or TokenStore().load():
-        try:
-            client.login(refresh_token)
-        except Exception as exc:
-            notes.append(f"Login failed: {exc}")
 
     store = FPLStore(client=client, db_path=db)
     try:
-        try:
-            store.refresh_all()
-            if store.history_is_stale():
-                store.refresh_all_player_histories()
-        except Exception as exc:
-            if store.players_df().empty:
-                raise EngineError(f"FPL API unreachable and no cached data: {exc}") from exc
-            notes.append(f"FPL API unreachable ({exc.__class__.__name__}); using cached data.")
+        with _refresh_lock:
+            try:
+                if force_refresh or store.bootstrap_age() > BOOTSTRAP_MAX_AGE_SECONDS:
+                    store.refresh_all()
+                if store.history_is_stale():
+                    store.refresh_all_player_histories()
+            except Exception as exc:
+                if store.players_df().empty:
+                    raise EngineError(f"FPL API unreachable and no cached data: {exc}") from exc
+                notes.append(f"FPL API unreachable ({exc.__class__.__name__}); using cached data.")
 
         synced = True
         try:
             state = store.load_manager_state(manager_id)
         except Exception as exc:
+            if _is_not_found(exc):
+                raise EngineError(f"No FPL team found with ID {manager_id}. Check the number "
+                                  "in your Points page link.") from exc
             if memory.has_snapshot and memory.data["manager"].get("id") == manager_id:
                 state = memory.to_manager_state()
                 synced = False
+            elif isinstance(exc, ValueError):      # e.g. team created but no gameweek played
+                raise EngineError(str(exc)) from exc
             else:
-                raise EngineError(f"Could not load your team: {exc}") from exc
+                raise EngineError(f"Couldn't load team {manager_id}: {exc}") from exc
 
         players, teams = store.players_df(), store.teams_df()
         current_gw = store.current_gameweek()
@@ -262,9 +296,8 @@ def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Pla
                 {"free_transfers": ft_src, "bank": bank_src}, model.ratings, result, baseline)
 
 
-def build_plan(db: str, memory_path: str, manager_id: int, refresh_token: str | None,
-               opts: PlanOptions) -> Plan:
-    return plan_from_setup(sync_setup(db, memory_path, manager_id, refresh_token), opts)
+def build_plan(db: str, memory_file: str | Path, manager_id: int, opts: PlanOptions) -> Plan:
+    return plan_from_setup(sync_setup(db, memory_file, manager_id), opts)
 
 
 # -- Views shared by CLI and dashboard ----------------------------------------

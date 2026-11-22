@@ -1,4 +1,4 @@
-"""HTTP client for the Fantasy Premier League public and authenticated APIs."""
+"""HTTP client for the Fantasy Premier League public API."""
 
 from __future__ import annotations
 
@@ -9,19 +9,13 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .auth import AUTH_HEADER, FPLAuthError, TokenStore, refresh_access_token  # noqa: F401
-
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://fantasy.premierleague.com/api"
 
 
 class FPLClient:
-    """Thin wrapper around the FPL REST API.
-
-    Supports both public endpoints (bootstrap-static, fixtures) and
-    authenticated endpoints (my-team) via an OAuth bearer token.
-    """
+    """Thin wrapper around the public FPL REST API (no login needed)."""
 
     _BROWSER_UA = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -41,19 +35,6 @@ class FPLClient:
         if hasattr(self.session, "mount"):
             adapter = HTTPAdapter(max_retries=retry, pool_maxsize=16)
             self.session.mount("https://", adapter)
-        self.authenticated = False
-
-    # -- Authentication -------------------------------------------------------
-
-    def login(self, refresh_token: str | None, store: TokenStore | None = None) -> None:
-        """Authenticate with an FPL refresh token (see ``auth``).
-
-        Raises ``FPLAuthError`` when no token works.
-        """
-        access = refresh_access_token(self.session, refresh_token, store)
-        self.session.headers[AUTH_HEADER] = f"Bearer {access}"
-        self.authenticated = True
-        logger.info("Authenticated with FPL successfully.")
 
     # -- Public endpoints -----------------------------------------------------
 
@@ -78,10 +59,6 @@ class FPLClient:
         return self._get(f"/leagues-classic/{league_id}/standings/?page_standings={page}")
 
     # -- Authenticated endpoints ----------------------------------------------
-
-    def get_my_team(self, manager_id: int) -> dict[str, Any]:
-        """Return the current squad for *manager_id* (requires login)."""
-        return self._get(f"/my-team/{manager_id}/")
 
     def get_entry(self, manager_id: int) -> dict[str, Any]:
         """Return public profile for *manager_id* (team name, rank, leagues)."""

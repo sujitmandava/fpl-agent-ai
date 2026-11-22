@@ -158,7 +158,8 @@ def test_cli_memory_commands(tmp_path, monkeypatch):
     from fpl_agent.cli.main import cli
     from fpl_agent.data_ingest.store import FPLStore
 
-    db, mem_path = tmp_path / "t.db", tmp_path / "mem.json"
+    db, mem_dir = tmp_path / "t.db", tmp_path / "memory"
+    mem_path = mem_dir / "42.json"
     store = FPLStore(client=MagicMock(), db_path=db)
     store._upsert(pd.DataFrame([
         {"id": 1, "web_name": "Ødegaard", "first_name": "Martin", "second_name": "Ødegaard",
@@ -169,13 +170,17 @@ def test_cli_memory_commands(tmp_path, monkeypatch):
     store._upsert(pd.DataFrame([{"id": 1, "name": "A", "short_name": "AAA"}]), "teams")
     store.close()
 
-    run = lambda *a: CliRunner().invoke(cli, ["--db", str(db), "--memory", str(mem_path), *a])  # noqa: E731
-    assert run("memory", "lock", "odegaard").exit_code == 0          # accent-insensitive
-    assert run("memory", "ban", "2").exit_code == 0                  # by id
-    assert run("memory", "set-ft", "3").exit_code == 0
-    assert run("memory", "note", "Free Hit in the blank").exit_code == 0
-    bad = run("memory", "lock", "nobody")
+    monkeypatch.delenv("FPL_MANAGER_ID", raising=False)
+    run = lambda *a: CliRunner().invoke(cli, ["--db", str(db), "--memory-dir", str(mem_dir), *a])  # noqa: E731
+    assert run("memory", "-m", "42", "lock", "odegaard").exit_code == 0   # accent-insensitive
+    assert run("memory", "-m", "42", "ban", "2").exit_code == 0           # by id
+    assert run("memory", "-m", "42", "set-ft", "3").exit_code == 0
+    assert run("memory", "-m", "42", "note", "Free Hit in the blank").exit_code == 0
+    bad = run("memory", "-m", "42", "lock", "nobody")
     assert bad.exit_code != 0 and "No player matches" in bad.output
+    no_id = run("memory", "lock", "odegaard")                             # no default team
+    assert no_id.exit_code != 0 and "manager-id" in no_id.output
+    assert not (mem_dir / "43.json").exists()
 
     data = json.loads(mem_path.read_text())
     assert [p["name"] for p in data["locked"]] == ["Ødegaard"]
@@ -199,13 +204,54 @@ def test_sync_falls_back_to_memory_when_api_down(tmp_path, monkeypatch):
 
     down = MagicMock()
     down.return_value.get_bootstrap.side_effect = ConnectionError("down")
-    down.return_value.get_my_team.side_effect = ConnectionError("down")
     down.return_value.get_manager_history.side_effect = ConnectionError("down")
-    down.return_value.authenticated = False
     monkeypatch.setattr(cli_main, "FPLClient", down)
 
-    setup = cli_main.sync_setup(str(db), str(mem_path), 42, None)
+    setup = cli_main.sync_setup(str(db), str(mem_path), 42)
     assert setup.synced is False
     assert setup.state.source == "memory"
     assert setup.state.bank == 12
     assert any("unreachable" in n for n in setup.notes)
+
+
+# -- Multi-user ---------------------------------------------------------------
+
+def test_parse_manager_id_accepts_ids_and_links():
+    from fpl_agent.engine import EngineError, parse_manager_id
+
+    assert parse_manager_id("1234567") == 1234567
+    assert parse_manager_id(" #42 ") == 42
+    assert parse_manager_id("https://fantasy.premierleague.com/entry/7588/event/12") == 7588
+    for bad in ("", "abc", "0", "12.5", "https://fantasy.premierleague.com/"):
+        with pytest.raises(EngineError):
+            parse_manager_id(bad)
+
+
+def test_each_team_gets_its_own_memory_file(tmp_path):
+    from fpl_agent.engine import memory_path
+
+    assert memory_path(tmp_path, 1) != memory_path(tmp_path, 2)
+    assert memory_path(tmp_path, 7) == tmp_path / "7.json"
+
+
+def test_unknown_team_gives_a_clear_error(tmp_path, monkeypatch):
+    import requests
+
+    from fpl_agent import engine
+    from fpl_agent.data_ingest.store import FPLStore
+
+    db = tmp_path / "t.db"
+    store = FPLStore(client=MagicMock(), db_path=db)
+    store._upsert(PLAYERS.assign(web_name=PLAYERS["web_name"]), "players")
+    store._upsert(TEAMS.assign(name="x"), "teams")
+    store.close()
+
+    resp = MagicMock(status_code=404)
+    client = MagicMock()
+    client.return_value.get_bootstrap.side_effect = ConnectionError("down")
+    client.return_value.get_manager_history.side_effect = requests.HTTPError(response=resp)
+    monkeypatch.setattr(engine, "FPLClient", client)
+
+    with pytest.raises(engine.EngineError, match="No FPL team found with ID 99"):
+        engine.sync_setup(str(db), tmp_path / "99.json", 99)
+    assert not (tmp_path / "99.json").exists()

@@ -1,8 +1,7 @@
 """Derive a manager's transfer state (free transfers, selling prices, bank)
 from FPL API payloads.
 
-The authenticated ``/my-team/`` endpoint gives these values directly. When
-login is unavailable they are reconstructed from public endpoints:
+They are reconstructed from public endpoints (no login):
 
 * free transfers: replayed from ``/entry/{id}/history/`` (transfers made per
   gameweek plus chips played);
@@ -28,7 +27,7 @@ class ManagerState:
     selling_prices: dict[int, int]       # player_id → selling price (×10)
     bank: int                            # ×10
     free_transfers: int
-    source: str                          # "auth", "public" or "memory"
+    source: str                          # "public" or "memory"
     notes: list[str] = field(default_factory=list)
     chips_played: list[dict] = field(default_factory=list)   # [{"name", "event"}]
     entry: dict = field(default_factory=dict)                # /entry/{id}/ payload

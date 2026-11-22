@@ -3,7 +3,7 @@
 
 Usage:
     python fpl_agent.py refresh
-    python fpl_agent.py recommend --manager-id 7588693
+    python fpl_agent.py recommend --manager-id <your team ID>
     python fpl_agent.py ui
 """
 

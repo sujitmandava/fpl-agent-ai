@@ -52,6 +52,7 @@ class FPLStore:
         """Pull bootstrap, fixtures, and persist everything."""
         self.refresh_bootstrap()
         self.refresh_fixtures()
+        set_meta(self.conn, "bootstrap_fetched_at", str(time.time()))
         logger.info("Full data refresh complete.")
 
     # -- Bootstrap (players, teams, gameweeks) --------------------------------
@@ -223,6 +224,11 @@ class FPLStore:
         logger.info("Fetched history for %d/%d players.", fetched, len(player_ids))
         return fetched
 
+    def bootstrap_age(self) -> float:
+        """Seconds since players and fixtures were last refreshed (inf if never)."""
+        ts = get_meta(self.conn, "bootstrap_fetched_at")
+        return float("inf") if ts is None else time.time() - float(ts)
+
     def history_is_stale(self, max_age: float = HISTORY_MAX_AGE_SECONDS) -> bool:
         ts = get_meta(self.conn, "history_fetched_at")
         if ts is None:
@@ -233,20 +239,9 @@ class FPLStore:
 
     def load_manager_state(self, manager_id: int) -> ManagerState:
         """Return squad, selling prices, bank and free transfers for the
-        upcoming gameweek, and persist the squad to ``your_team``.
-
-        Uses the authenticated ``/my-team/`` endpoint when logged in (exact
-        values, including transfers already made for the next deadline);
-        otherwise reconstructs everything from public endpoints.
+        upcoming gameweek, reconstructed from public endpoints.
         """
-        state = None
-        if getattr(self.client, "authenticated", False):
-            try:
-                state = self._manager_state_auth(manager_id)
-            except Exception as exc:
-                logger.info("Auth endpoint failed (%s); using public endpoints.", exc)
-        if state is None:
-            state = self._manager_state_public(manager_id)
+        state = self._manager_state_public(manager_id)
 
         # Chips played and profile (public; cheap).
         try:
@@ -261,35 +256,6 @@ class FPLStore:
         except Exception as exc:
             logger.info("Could not fetch manager profile: %s", exc)
         return state
-
-    def _manager_state_auth(self, manager_id: int) -> ManagerState:
-        data = self.client.get_my_team(manager_id)
-        picks = data.get("picks", [])
-        if not picks:
-            raise ValueError("my-team returned no picks")
-        self._store_picks(picks)
-        tr = data.get("transfers", {}) or {}
-        limit = tr.get("limit")
-        made = int(tr.get("made", 0) or 0)
-        notes = []
-        if limit is None:
-            # Unlimited (wildcard / free hit active, or pre-season).
-            ft = 15
-            notes.append("Unlimited transfers this gameweek (chip active).")
-        else:
-            ft = max(int(limit) - made, 0)
-            if made:
-                notes.append(f"{made} transfer(s) already made for the next deadline.")
-        return ManagerState(
-            squad=[p["element"] for p in picks],
-            selling_prices={p["element"]: int(p["selling_price"]) for p in picks},
-            purchase_prices={p["element"]: int(p["purchase_price"]) for p in picks
-                             if p.get("purchase_price") is not None},
-            bank=int(tr.get("bank", 0) or 0),
-            free_transfers=ft,
-            source="auth",
-            notes=notes,
-        )
 
     def _manager_state_public(self, manager_id: int) -> ManagerState:
         notes: list[str] = []
@@ -323,17 +289,7 @@ class FPLStore:
                 f"Purchase price unknown for {len(fallback)} player(s); assumed current price."
             )
 
-        for p in picks:
-            p["selling_price"] = sell[p["element"]]
-            p["purchase_price"] = bought[p["element"]]
-        self._store_picks(picks)
-
         ft = compute_free_transfers(current, chips, max_ft=self.max_free_transfers())
-        notes.append(
-            "Logged out: free transfers and selling prices were reconstructed from public "
-            "data. Transfers already made for the next deadline are not visible. Set "
-            "FPL_REFRESH_TOKEN to log in (see README → Logging in)."
-        )
         return ManagerState(
             squad=squad, selling_prices=sell, bank=bank,
             free_transfers=ft, source="public", notes=notes,
@@ -354,17 +310,6 @@ class FPLStore:
         # gameweek itself; later if the player had no fixture that week).
         df = df[df["value"] > 0].drop_duplicates("player_id", keep="first")
         return {int(r.player_id): int(r.value) for r in df.itertuples()}
-
-    def _store_picks(self, picks: list[dict]) -> None:
-        df = pd.json_normalize(picks).rename(columns={"element": "player_id"})
-        cols = [
-            "player_id", "selling_price", "purchase_price",
-            "position", "is_captain", "is_vice_captain", "multiplier",
-        ]
-        df = df[[c for c in cols if c in df.columns]]
-        self.conn.execute("DELETE FROM your_team")
-        df.to_sql("your_team", self.conn, if_exists="append", index=False)
-        self.conn.commit()
 
     # -- Query helpers --------------------------------------------------------
 

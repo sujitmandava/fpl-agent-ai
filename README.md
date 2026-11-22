@@ -1,6 +1,6 @@
 # FPL Agent AI
 
-A Fantasy Premier League planner: it pulls FPL data, forecasts expected points from underlying stats, optimises transfers, lineup, captain and chips, and shows the results in a local dashboard or the terminal. It never touches your FPL account; you make the moves yourself.
+A Fantasy Premier League planner: it pulls FPL data, forecasts expected points from underlying stats, optimises transfers, lineup, captain and chips, and shows the results in a dashboard or the terminal. Anyone can use it: enter an FPL team ID and it plans from FPL's public data. No login, and it never touches your FPL account; you make the moves yourself.
 
 ## Architecture
 
@@ -27,32 +27,22 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-The team ID defaults to 7588693 (`DEFAULT_MANAGER_ID` in `fpl_agent/engine.py`); set `FPL_MANAGER_ID` in `.env` to use another (see `.env.example`).
-
-#### Logging in (optional, recommended)
-
-Without a login the agent rebuilds free transfers and selling prices from
-public data and can't see transfers you've already made this gameweek. FPL
-moved sign-in to `account.premierleague.com`, which blocks scripted
-email/password logins, so the agent uses the token your browser already has:
-
-1. Log in at <https://fantasy.premierleague.com>.
-2. Open DevTools → **Application** → **Local Storage** → `https://fantasy.premierleague.com`.
-3. Click the key starting with `oidc.user:` and copy its whole value (or run
-   `copy(localStorage[Object.keys(localStorage).find(k => k.startsWith('oidc.user:'))])`
-   in the Console).
-4. Paste it into `.env` in single quotes: `FPL_REFRESH_TOKEN='{"id_token":...}'`.
-
-The token rotates on every use. The agent saves the newest one to
-`.fpl_auth.json` (git-ignored, readable only by you), so you paste it once.
-Paste a fresh one if it expires (around 30 days unused) or after logging out
-everywhere. Using it may sign your browser out of FPL; log in there again.
+You need an FPL team ID. It's the number in your Points page link:
+`fantasy.premierleague.com/entry/<ID>/event/…`. Everything comes from FPL's
+public API, so no login is needed. Public data can't see transfers you've
+already made for the next deadline; if you've made some, set your free
+transfers and bank in the Memory tab (or `memory set-ft` / `memory set-bank`).
 
 ### 2. Open the dashboard
 
 ```bash
 python fpl_agent.py ui            # opens http://localhost:8501
 ```
+
+The landing screen asks for a team ID (or a pasted Points page link). The ID is
+kept in the URL (`?team=1234567`), so a plan can be bookmarked or shared;
+**Switch team** in the sidebar goes back to the landing screen. Player and
+fixture data is cached once and shared by everyone using the same server.
 
 | Tab | What it shows |
 |---|---|
@@ -72,7 +62,7 @@ re-syncs.
 ### 3. Or use the terminal
 
 ```bash
-python fpl_agent.py recommend --manager-id 7588693
+python fpl_agent.py recommend --manager-id 1234567   # or -m; or set FPL_MANAGER_ID
 ```
 
 Every run refreshes players and fixtures, re-fetches per-match history when the
@@ -97,9 +87,14 @@ Useful options:
 
 ### 4. Agent memory
 
-The agent keeps a persistent memory of your setup in `fpl_memory.json`
-(readable JSON, gitignored; set `FPL_MEMORY` to move it). It survives cache
-rebuilds and is updated on every `recommend`, or with `status --sync`.
+The agent keeps a persistent memory of each team in `memory/<team id>.json`
+(readable JSON, gitignored; set `FPL_MEMORY_DIR` to move the folder). It
+survives cache rebuilds and is updated on every `recommend`, or with
+`status --sync`. There's no login, so on a shared server anyone who opens a
+team ID can see and change that team's memory.
+
+The examples below assume `FPL_MANAGER_ID` is set; otherwise add `-m <ID>`
+(for `memory`, before the subcommand: `memory -m 1234567 lock Haaland`).
 
 ```bash
 python fpl_agent.py status                 # team, free transfers, bank, chips, notes, leagues
@@ -143,7 +138,7 @@ python fpl_agent.py hypotheses             # re-test open hypotheses; run after 
 
 | Component | Purpose |
 |-----------|---------|
-| `api_client.py` | HTTP wrapper for public (`/bootstrap-static/`, `/fixtures/`, `/element-summary/{id}/`) and authenticated (`/my-team/{id}/`, `/entry/{id}/transfers/`) FPL endpoints. |
+| `api_client.py` | HTTP wrapper for the public FPL endpoints (`/bootstrap-static/`, `/fixtures/`, `/element-summary/{id}/`, `/entry/{id}/…`). |
 | `models.py` | SQLite schema (tables: `players`, `teams`, `fixtures`, `player_history`, `gameweeks`, `your_team`). |
 | `store.py` | Fetch → normalise → upsert orchestration with pandas. |
 
@@ -197,11 +192,9 @@ Tests cover:
 
 | Variable | Description |
 |----------|-------------|
-| `FPL_REFRESH_TOKEN` | FPL login token from your browser (alternative to `--refresh-token`; see Logging in) |
-| `FPL_AUTH_FILE` | Where the rotated token is kept (default `.fpl_auth.json`) |
-| `FPL_MANAGER_ID` | Your FPL manager ID (default 7588693) |
+| `FPL_MANAGER_ID` | Optional team ID so the CLI doesn't need `--manager-id`; the dashboard pre-fills it |
 | `FPL_DB` | SQLite cache path (rebuilt automatically on a new season or schema change) |
-| `FPL_MEMORY` | Agent memory file (default `fpl_memory.json`) |
+| `FPL_MEMORY_DIR` | Folder for per-team memory files (default `memory/`) |
 | `FPL_LEAGUE_ID` | Mini-league to track (default: your first private classic league) |
 | `FPL_FREE_TRANSFERS`, `FPL_BANK` | Optional overrides; normally read from the API |
 
