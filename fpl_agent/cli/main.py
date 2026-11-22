@@ -648,6 +648,18 @@ def ui(ctx: click.Context, port: int) -> None:
         pass
 
 
+@cli.command()
+@click.option("--port", type=int, default=8000, show_default=True)
+@click.option("--reload", is_flag=True, help="Restart on code changes (development).")
+@click.pass_context
+def api(ctx: click.Context, port: int, reload: bool) -> None:
+    """Serve the JSON API the web app uses (http://localhost:PORT/api/...)."""
+    import uvicorn
+
+    os.environ["FPL_DB"] = ctx.obj["db"]
+    uvicorn.run("fpl_agent.api:app", host="127.0.0.1", port=port, reload=reload)
+
+
 # -- Standalone runner --------------------------------------------------------
 
 if __name__ == "__main__":

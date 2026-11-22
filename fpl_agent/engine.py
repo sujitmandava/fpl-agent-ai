@@ -92,6 +92,7 @@ class Setup:
     notes: list[str] = field(default_factory=list)
     chip_defs: list[dict] = field(default_factory=list)
     league: LeagueSnapshot | None = None
+    deadlines: dict[int, str] = field(default_factory=dict)   # GW → ISO deadline (UTC)
 
     @property
     def leagues(self) -> list[dict]:
@@ -168,6 +169,8 @@ def sync_setup(db: str, memory_file: str | Path, manager_id: int,
             scoring=store.scoring_rules(), current_gw=current_gw, chips=chips,
             max_ft=store.max_free_transfers(), synced=synced, notes=notes,
             chip_defs=store.chip_definitions(),
+            deadlines={int(r.id): r.deadline_time for r in store.gameweeks_df().itertuples()
+                       if r.deadline_time},
         )
         if synced:
             load_league(setup, client=client)
@@ -209,6 +212,9 @@ class PlanOptions:
     bench_weight: float = 0.1
     ft_value: float = 1.0
     consistency: float = 0.5              # preference for steady returners
+    # Locked/banned player ids for this request; None = use the team's memory.
+    locked: frozenset[int] | None = None
+    banned: frozenset[int] | None = None
 
 
 @dataclass
@@ -260,7 +266,8 @@ def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Pla
 
     common = dict(bench_weight=opts.bench_weight, ft_value=opts.ft_value,
                   consistency=opts.consistency,
-                  locked=memory.locked_ids, banned=memory.banned_ids)
+                  locked=set(memory.locked_ids if opts.locked is None else opts.locked),
+                  banned=set(memory.banned_ids if opts.banned is None else opts.banned))
     names = dict(zip(setup.players["id"], setup.players["web_name"]))
     chip_mode = opts.wildcard or opts.free_hit
     try:
