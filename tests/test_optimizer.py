@@ -150,3 +150,26 @@ class TestOptimizer:
 
         assert len(result.transfers_in) == 0
         assert len(result.transfers_out) == 0
+
+
+def test_consistency_breaks_ties_toward_steady_returners():
+    """Two equal-xPts forwards: the one more likely to return is chosen, unless consistency=0."""
+    players = _build_players(60)
+    fc = _build_forecast(players)
+    fc["expected_points_gw1"] = fc["total_expected_points"]
+    fc["p_return_gw1"] = 0.3
+    fwds = players[players["element_type"] == 4].sort_values("now_cost", ascending=False)
+    a, b = int(fwds.iloc[0]["id"]), int(fwds.iloc[1]["id"])
+    # Make them identical in price and xPts; b returns far more often.
+    players.loc[players["id"] == b, "now_cost"] = int(players.loc[players["id"] == a, "now_cost"].iloc[0])
+    players.loc[players["id"].isin([a, b]), "team_id"] = [1, 2]
+    fc.loc[fc["player_id"].isin([a, b]), ["total_expected_points", "expected_points_gw1"]] = 30.0
+    fc.loc[fc["player_id"] == a, "p_return_gw1"] = 0.2
+    fc.loc[fc["player_id"] == b, "p_return_gw1"] = 0.7
+    state = TeamState(current_squad=[], selling_prices={}, bank=2000, free_transfers=15)
+
+    steady = optimize(state, fc, players, unlimited_transfers=True, consistency=1.0)
+    assert b in steady.starting_xi
+    # The preference only adds to the objective; with it off, xPts are unchanged.
+    plain = optimize(state, fc, players, unlimited_transfers=True, consistency=0.0)
+    assert plain.next_gw_points == pytest.approx(steady.next_gw_points)

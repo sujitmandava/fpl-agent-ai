@@ -210,3 +210,54 @@ def test_finishing_form_moves_forecast_a_little():
     finally:
         ep.FINISH_WEIGHT = old
     assert 0 < with_form - without < 0.5
+
+
+def test_returns_counted_and_streak():
+    """Returns = goal, assist, GK/DEF clean sheet (60+) or DC points; blanks are the rest."""
+    from fpl_agent.forecast.expected_points import returned
+
+    positions = {1: 4, 2: 2, 3: 3}
+    rows = pd.DataFrame([
+        # forward: goal, blank, assist
+        {"player_id": 1, "minutes": 90, "goals_scored": 1, "assists": 0, "clean_sheets": 0, "total_points": 6},
+        {"player_id": 1, "minutes": 90, "goals_scored": 0, "assists": 0, "clean_sheets": 1, "total_points": 2},
+        {"player_id": 1, "minutes": 90, "goals_scored": 0, "assists": 1, "clean_sheets": 0, "total_points": 5},
+        # defender clean sheet counts; a 30-minute "clean sheet" doesn't score
+        {"player_id": 2, "minutes": 90, "goals_scored": 0, "assists": 0, "clean_sheets": 1, "total_points": 6},
+        {"player_id": 2, "minutes": 30, "goals_scored": 0, "assists": 0, "clean_sheets": 1, "total_points": 1},
+        # midfielder: DC points only (2 + 2) is a return; a clean sheet alone (+1) isn't
+        {"player_id": 3, "minutes": 90, "goals_scored": 0, "assists": 0, "clean_sheets": 0, "total_points": 4},
+        {"player_id": 3, "minutes": 90, "goals_scored": 0, "assists": 0, "clean_sheets": 1, "total_points": 3},
+    ])
+    assert returned(rows, positions, DEFAULT_SCORING).tolist() == [True, False, True, True, False, True, False]
+
+    players, history, fixtures, teams = build_world()
+    fixtures = _future(fixtures, [{"id": 500, "event": 9, "team_h": 10, "team_a": 20}])
+    fc = ExpectedPointsModel(players, history, fixtures, teams, current_gw=8, horizon=1).predict() \
+        .set_index("player_id")
+    # Player 1 scores in even GWs only: 4 returns in 8, last game a return.
+    assert fc.at[1, "apps"] == 8
+    assert fc.at[1, "returns"] >= 4
+    assert fc.at[1, "return_streak"] >= 1
+    for col in ("p_return_next", "return_rate"):
+        assert ((fc[col] >= 0) & (fc[col] <= 1)).all()
+    # The cameo player (one 10-minute appearance, then nothing) has little chance of returning.
+    assert fc.at[5, "p_return_next"] < fc.at[1, "p_return_next"]
+
+
+def test_return_chance_depends_on_opponent():
+    """Same player, tougher opponent → lower chance of an attacking return;
+    defender facing a weak attack → higher chance (clean sheet)."""
+    players, history, fixtures, teams = build_world()
+    m = ExpectedPointsModel(players, history, fixtures, teams, current_gw=8, horizon=1)
+    prof = m.player_profiles()
+    r = m.ratings
+    tight = min(r.dfn, key=r.dfn.get)       # concedes least
+    leaky = max(r.dfn, key=r.dfn.get)
+    for opp_hard, opp_easy in [(tight, leaky)]:
+        if 10 in (opp_hard, opp_easy):
+            continue
+        assert m._return_chance(prof[1], 3, 10, opp_hard, True) < m._return_chance(prof[1], 3, 10, opp_easy, True)
+    weak_att = min((t for t in r.att if t != 10), key=r.att.get)
+    strong_att = max((t for t in r.att if t != 10), key=r.att.get)
+    assert m._return_chance(prof[3], 2, 10, weak_att, True) > m._return_chance(prof[3], 2, 10, strong_att, True)

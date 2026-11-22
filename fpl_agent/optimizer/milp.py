@@ -11,6 +11,7 @@ Decision variables (binary):
 Objective (maximise)::
 
     Σ_g  w_g · Σ_i  EP[i,g] · ( y[i,g] + c[i,g] + bench_weight · (x[i] − y[i,g]) )
+      + consistency · Σ_g w_g · Σ_i  (P_return[i,g] − position avg) · y[i,g]
       − 4 · hits − ft_value · free_transfers_used
 
 * ``w_g = discount^(g − first_gw)`` – later gameweeks are less certain and the
@@ -22,6 +23,14 @@ Objective (maximise)::
   transfer that lowers next week's free-transfer count. Marginal moves are
   skipped and hits must clear 4 + ft_value. With 5 banked, the first transfer
   is free of this cost (saving it would exceed the cap).
+
+* ``consistency`` is a preference for players who return (goal, assist,
+  clean sheet, DC points) week after week over boom-or-bust ones with the
+  same xPts. It is measured against the position average, so it never changes
+  the formation, only who fills it. At 0.5, a starter 20 points more likely to
+  return than his position's average is worth an extra 0.1 points a week:
+  enough to settle close calls, not to override a clear xPts gap. Captaincy
+  ignores it; the armband is about ceiling.
 
 Constraints: 15 players, 2/5/5/3 by position, ≤3 per club, budget, and in
 every gameweek a valid XI (1 GK, 3–5 DEF, 2–5 MID, 1–3 FWD) with one captain.
@@ -58,12 +67,14 @@ MAX_FREE_TRANSFERS = 5
 BENCH_WEIGHT = 0.1
 DISCOUNT = 0.85
 FT_VALUE = 1.0
+CONSISTENCY = 0.5
 # Candidate pool per position (plus best value-for-money picks and the current
 # squad). Keeps the MILP small without excluding realistic options.
 POOL_TOP_EP = 40
 POOL_TOP_VALUE = 15
 
 _GW_COL = re.compile(r"^expected_points_gw(\d+)$")
+_RET_COL = "p_return_gw{}"
 
 
 class OptimizationError(RuntimeError):
@@ -122,6 +133,7 @@ def optimize(
     bench_weight: float = BENCH_WEIGHT,
     discount: float = DISCOUNT,
     ft_value: float = FT_VALUE,
+    consistency: float = CONSISTENCY,
     max_transfers: int | None = None,
     unlimited_transfers: bool = False,
     locked: set[int] | None = None,
@@ -142,8 +154,9 @@ def optimize(
         Needs ``id``, ``element_type``, ``team_id``, ``now_cost``, ``web_name``.
     horizon : int, optional
         Use only the first *horizon* gameweek columns.
-    bench_weight, discount, ft_value : float
-        See module docstring.
+    bench_weight, discount, ft_value, consistency : float
+        See module docstring. ``consistency`` needs ``p_return_gw{N}``
+        columns in *forecast*; without them it has no effect.
     max_transfers : int, optional
         Hard cap on transfers (0 evaluates the current squad as-is).
     unlimited_transfers : bool
@@ -161,7 +174,8 @@ def optimize(
     gws = [g for g, _ in gw_cols]
     ep_cols = [c for _, c in gw_cols]
 
-    keep_cols = ["player_id", *ep_cols]
+    ret_cols = [_RET_COL.format(g) for g in gws if _RET_COL.format(g) in forecast.columns]
+    keep_cols = ["player_id", *ep_cols, *ret_cols]
     if "total_expected_points" in forecast.columns and "total_expected_points" not in keep_cols:
         keep_cols.append("total_expected_points")
     merged = players[["id", "element_type", "team_id", "now_cost", "web_name"]].merge(
@@ -169,6 +183,19 @@ def optimize(
     )
     if "total_expected_points" not in merged.columns:
         merged["total_expected_points"] = merged[ep_cols].sum(axis=1)
+
+    # Consistency edge: chance of a return minus the position average among
+    # players who are likely to feature (computed before pooling, so the
+    # baseline doesn't depend on who makes the shortlist).
+    edge_cols = []
+    for g in gws:
+        col = _RET_COL.format(g)
+        if col not in merged.columns:
+            continue
+        active = merged[merged[col] > 0.05]
+        avg = active.groupby("element_type")[col].mean()
+        merged[f"ret_edge_{g}"] = (merged[col] - merged["element_type"].map(avg)).fillna(0.0)
+        edge_cols.append(g)
 
     current_set = set(team_state.current_squad)
     merged = _candidate_pool(merged, current_set | locked).reset_index(drop=True)
@@ -189,6 +216,8 @@ def optimize(
     club = dict(zip(merged["id"], merged["team_id"]))
     cost = dict(zip(merged["id"], merged["cost"]))
     ep = {(pid, g): float(v) for g, col in gw_cols for pid, v in zip(merged["id"], merged[col])}
+    ret_edge = {(pid, g): float(v) for g in edge_cols
+                for pid, v in zip(merged["id"], merged[f"ret_edge_{g}"])}
 
     prob = LpProblem("FPL_Squad_Selection", LpMaximize)
     x = {i: LpVariable(f"x_{i}", cat="Binary") for i in ids}
@@ -213,7 +242,11 @@ def optimize(
         weights[g] * ep[i, g] * (y[i, g] + c[i, g] + bench_weight * (x[i] - y[i, g]))
         for i in ids for g in gws
     )
-    prob += points - TRANSFER_HIT * h - ft_value * ft_lost, "objective"
+    steadiness = lpSum(
+        weights[g] * consistency * ret_edge[i, g] * y[i, g]
+        for i in ids for g in edge_cols
+    ) if consistency else 0
+    prob += points + steadiness - TRANSFER_HIT * h - ft_value * ft_lost, "objective"
 
     # -- Squad constraints ----------------------------------------------------
     prob += lpSum(x.values()) == SQUAD_SIZE, "squad_size"

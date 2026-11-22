@@ -134,6 +134,7 @@ League effective ownership also appears next to close-call transfer options.
 
 ```bash
 python fpl_agent.py backtest               # walk-forward accuracy on played gameweeks
+python fpl_agent.py hypotheses             # re-test open hypotheses; run after each gameweek
 ```
 
 ## Modules

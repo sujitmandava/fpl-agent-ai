@@ -174,6 +174,7 @@ class PlanOptions:
     free_hit: bool = False
     bench_weight: float = 0.1
     ft_value: float = 1.0
+    consistency: float = 0.5              # preference for steady returners
 
 
 @dataclass
@@ -224,6 +225,7 @@ def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Pla
     forecast = model.predict()
 
     common = dict(bench_weight=opts.bench_weight, ft_value=opts.ft_value,
+                  consistency=opts.consistency,
                   locked=memory.locked_ids, banned=memory.banned_ids)
     names = dict(zip(setup.players["id"], setup.players["web_name"]))
     chip_mode = opts.wildcard or opts.free_hit

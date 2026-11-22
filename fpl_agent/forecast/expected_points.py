@@ -74,6 +74,15 @@ FINISH_WEIGHT = 0.15
 # more likely than Poisson says. Poisson under-predicted clean sheets by ~5
 # percentage points in the walk-forward test; k=4 was calibrated.
 CS_DISPERSION = 4.0
+# Returns: a match where he did more than turn up, i.e. a goal, an assist, a
+# clean sheet (GK/DEF, 60+ minutes) or defensive-contribution points. The
+# return rate is the recency-weighted share of his appearances with a return,
+# shrunk toward the position average by RETURN_SHRINK appearances.
+RETURN_SHRINK = 4.0
+# Chance of a return next time = this share of the fixture-based model
+# (role × fixture) plus the rest from his own return rate. Calibrated in the
+# walk-forward test.
+RETURN_MODEL_WEIGHT = 0.25
 
 
 def _pts(scoring: dict, key: str, pos: int) -> float:
@@ -113,6 +122,15 @@ def nb_floor_div(lam: float, div: int, k: float | None = None, nmax: int = 25) -
             p *= (n - 1 + k) / n * q
         total += p * (n // div)
     return total
+
+
+def returned(history: pd.DataFrame, positions: dict[int, int], scoring: dict) -> pd.Series:
+    """True for each match row with a return (goal, assist, GK/DEF clean sheet, DC points)."""
+    pos = history["player_id"].map(positions)
+    get = lambda col: history[col].fillna(0) if col in history.columns else 0  # noqa: E731
+    cs = (get("clean_sheets") > 0) & pos.isin([1, 2]) & (get("minutes") >= 60)
+    dc = defensive_points_earned(history, positions, scoring) > 0
+    return (get("goals_scored") > 0) | (get("assists") > 0) | cs | dc
 
 
 def defensive_points_earned(history: pd.DataFrame, positions: dict[int, int], scoring: dict) -> pd.Series:
@@ -190,6 +208,11 @@ class ExpectedPointsModel:
           (recent goals − xG per 90, shrunk), ``dc_rate``,
           ``cs_next`` (clean-sheet probability, next GW), ``xgi_next``
           (expected goal involvements, next GW), ``variance``
+        * consistency: ``returns``/``apps`` (matches with a return / matches
+          played this season), ``return_rate`` (recency-weighted, shrunk),
+          ``return_streak`` (consecutive appearances with a return, latest
+          first), ``blanks_last4``, ``p_return_gw{N}`` and ``p_return_next``
+          (chance of a return in that gameweek, including the chance he plays)
         """
         profiles = self.player_profiles()
         team_fx = self._team_fixtures()
@@ -203,20 +226,23 @@ class ExpectedPointsModel:
             total, cs_next, xgi_next = 0.0, 0.0, 0.0
             for k, gw in enumerate(future):
                 avail = self._availability(p, k)
-                gw_pts = 0.0
+                gw_pts, p_blank = 0.0, 1.0
                 for opp, home in team_fx.get((team, gw), []):
                     if prof is None:
                         pts, cs, xgi = float(getattr(p, "ep_next", 0) or 0), 0.0, 0.0
                     else:
                         pts, cs, xgi = self._fixture_points(prof, pos, team, opp, home)
+                        p_blank *= 1.0 - prof["p_play"] * self._return_chance(prof, pos, team, opp, home)
                     gw_pts += pts
                     if k == 0:
                         cs_next = max(cs_next, cs)
                         xgi_next += xgi * avail
                 gw_pts = max(gw_pts * avail, 0.0)
                 row[f"expected_points_gw{gw}"] = round(gw_pts, 2)
+                row[f"p_return_gw{gw}"] = round((1.0 - p_blank) * avail, 3)
                 total += gw_pts
             row["expected_points_next"] = row[f"expected_points_gw{future[0]}"] if future else 0.0
+            row["p_return_next"] = row[f"p_return_gw{future[0]}"] if future else 0.0
             row["total_expected_points"] = round(total, 2)
             prof = prof or {}
             row.update(
@@ -230,6 +256,11 @@ class ExpectedPointsModel:
                 cs_next=round(cs_next, 3),
                 xgi_next=round(xgi_next, 3),
                 variance=round(prof.get("variance", 0.0), 3),
+                returns=int(prof.get("returns", 0)),
+                apps=int(prof.get("apps", 0)),
+                return_rate=round(prof.get("return_rate", 0.0), 3),
+                return_streak=int(prof.get("return_streak", 0)),
+                blanks_last4=int(prof.get("blanks_last4", 0)),
             )
             records.append(row)
         return pd.DataFrame(records)
@@ -254,6 +285,7 @@ class ExpectedPointsModel:
             h["goals_scored"] = 0.0
         h["goals_scored"] = pd.to_numeric(h["goals_scored"], errors="coerce").fillna(0.0)
         h["dc_hit"] = (defensive_points_earned(h, positions, self.scoring) > 0).astype(float)
+        h["ret"] = returned(h, positions, self.scoring).astype(float)
         h["w"] = RATE_DECAY ** (self.current_gw - h["gameweek"]).clip(lower=0)
         h["exposure"] = self._team_xg_exposure(h)
         sort_cols = ["gameweek", "fixture"] if "fixture" in h.columns else ["gameweek"]
@@ -300,6 +332,15 @@ class ExpectedPointsModel:
             dc_rate = (float((full["w"] * full["dc_hit"]).sum()) + SHRINK_MATCHES * pr["dc_rate"]) \
                 / (float(full["w"].sum()) + SHRINK_MATCHES)
             pts_recent = g.loc[g["minutes"] > 0, "total_points"].tail(8)
+            # Consistency: how often an appearance brings a return.
+            rets = played["ret"].to_numpy()
+            return_rate = (float((played["w"] * played["ret"]).sum()) + RETURN_SHRINK * pr["return_rate"]) \
+                / (float(played["w"].sum()) + RETURN_SHRINK)
+            streak = 0
+            for r_ in rets[::-1]:
+                if not r_:
+                    break
+                streak += 1
 
             out[int(pid)] = {
                 "p_play": p_play, "p60": p60, "exp_minutes": exp_minutes,
@@ -310,6 +351,8 @@ class ExpectedPointsModel:
                 "bonus90": rate("bonus"), "yc90": rate("yellow_cards"),
                 "saves90": rate("saves"), "dc_rate": dc_rate,
                 "variance": float(pts_recent.var()) if len(pts_recent) >= 2 else 0.0,
+                "return_rate": return_rate, "returns": int(rets.sum()), "apps": len(rets),
+                "return_streak": streak, "blanks_last4": int(len(rets[-4:]) - rets[-4:].sum()),
             }
         return out
 
@@ -335,6 +378,7 @@ class ExpectedPointsModel:
         """Positional per-90 averages among regulars, discounted a little."""
         mins_total = h.groupby("player_id")["minutes"].transform("sum")
         regulars = h[(mins_total >= 900) & (h["minutes"] > 0)]
+        starts = h[h["minutes"] >= 60]
         priors = {}
         for pos in (1, 2, 3, 4):
             r = regulars[regulars["pos"] == pos]
@@ -352,6 +396,10 @@ class ExpectedPointsModel:
                 "yellow_cards": per90("yellow_cards"),
                 "saves": per90("saves"),
                 "dc_rate": float(full["dc_hit"].mean()) * PRIOR_DISCOUNT if len(full) else 0.0,
+                # Over every 60+ minute appearance, not just regulars, so it
+                # exists from GW1 (nobody has 900 minutes until ~GW10).
+                "return_rate": float(starts[starts["pos"] == pos]["ret"].mean()) * PRIOR_DISCOUNT
+                if "ret" in h.columns and (starts["pos"] == pos).any() else 0.0,
             }
         return priors
 
@@ -393,6 +441,52 @@ class ExpectedPointsModel:
         pts += prof["bonus90"] * frac * bonus_mult * _pts(sc, "bonus", pos)
         pts += prof["yc90"] * frac * _pts(sc, "yellow_cards", pos)
         return pts, prof["p60"] * p_cs, xg + xa
+
+    def _return_hazards(self, prof: dict, pos: int, g_for: float, g_against: float
+                        ) -> tuple[float, float]:
+        """(attacking, defensive) return hazard for one match he plays.
+
+        P(no return) = exp(−(attacking + defensive)). Attacking: goals and
+        assists from his share of the team's expected goals. Defensive: clean
+        sheet (GK/DEF) and DC, treated as independent.
+        """
+        p_play = max(prof["p_play"], 1e-6)
+        frac = prof["exp_minutes"] / 90.0 / p_play          # share of 90 when he plays
+        p60 = min(prof["p60"] / p_play, 1.0)
+        attack = (prof["xg_share"] + prof["xa_share"]) * g_for * frac
+        defence = 0.0
+        if pos in (1, 2):
+            defence -= math.log(max(1e-9, 1.0 - p60 * p_zero(g_against)))
+        if _pts(self.scoring, "defensive_contribution", pos):
+            defence -= math.log(max(1e-9, 1.0 - p60 * prof["dc_rate"]))
+        return attack, defence
+
+    def _return_chance(self, prof: dict, pos: int, team: int, opp: int, home: bool) -> float:
+        """Chance of a return in one fixture, given that he plays.
+
+        Two parts, both opponent-aware:
+
+        * the fixture model (``RETURN_MODEL_WEIGHT``): his hazards in this fixture;
+        * his own return rate, adjusted for this opponent: his rate's hazard is
+          split into attacking and defensive parts in his usual proportions,
+          and each part is scaled by how this fixture compares with his
+          team's average one. Against a tight defence the attacking part
+          shrinks; when his team is likely to keep a clean sheet, the
+          defensive part grows.
+        """
+        r = self.ratings
+        g_for, g_against = r.expected_goals(team, opp, home)
+        a_fix, d_fix = self._return_hazards(prof, pos, g_for, g_against)
+        a_avg, d_avg = self._return_hazards(prof, pos, r.mu * r.att.get(team, 1.0),
+                                            r.mu * r.dfn.get(team, 1.0))
+        model = 1.0 - math.exp(-(a_fix + d_fix))
+
+        own = prof["return_rate"]
+        if a_avg + d_avg > 0:
+            h_own = -math.log(max(1e-6, 1.0 - own))
+            scale = (a_fix + d_fix) / (a_avg + d_avg)
+            own = 1.0 - math.exp(-h_own * scale)
+        return RETURN_MODEL_WEIGHT * model + (1.0 - RETURN_MODEL_WEIGHT) * own
 
     # -- Helpers --------------------------------------------------------------
 

@@ -28,3 +28,6 @@ fpl_memory.json
 # FPL login token (rotates on every use)
 .fpl_auth.json
 .fpl_auth.tmp
+
+# Weekly hypothesis results (rebuilt from the database)
+hypothesis_log.json

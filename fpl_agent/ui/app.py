@@ -97,6 +97,10 @@ with st.sidebar.expander("Advanced"):
                          help="Higher = fewer, surer moves.")
     bench_weight = st.slider("Bench weight", 0.0, 0.5, 0.1, 0.05,
                              help="How much bench xPts count (auto-sub value).")
+    consistency = st.slider("Consistency preference", 0.0, 2.0, 0.5, 0.25,
+                            help="Favour players who return (goal, assist, clean sheet, DC) "
+                                 "week after week over boom-or-bust ones with similar xPts. "
+                                 "0 = pure xPts.")
 
 opts = PlanOptions(
     horizon=horizon,
@@ -106,6 +110,7 @@ opts = PlanOptions(
     free_hit=chip_mode == "Free Hit",
     bench_weight=bench_weight,
     ft_value=ft_value,
+    consistency=consistency,
 )
 
 try:
@@ -444,6 +449,9 @@ with tab_players:
         "Finishing": view["finish90"],
         "DC%": (view["dc_rate"] * 100).where(view["pos"] != "GK"),
         "CS%": view["cs_next"] * 100,
+        "Returns": [f"{r}/{a}" if a else "" for r, a in zip(view["returns"], view["apps"])],
+        "Streak": view["return_streak"],
+        "Ret% next": view["p_return_next"] * 100,
         **{f"GW{g}": view[f"expected_points_gw{g}"] for g in gws},
         f"xPts {len(gws)}GW": view["total_expected_points"],
         "xPts/£m": view["total_expected_points"] / view["price"],
@@ -463,6 +471,12 @@ with tab_players:
             format="%+.2f", help="Recent goals − xG per 90 (shrunk). 15% of it is carried into the forecast"),
         "League EO": st.column_config.NumberColumn(
             format="%.0f%%", help="Effective ownership among your mini-league rivals (captain counts double)"),
+        "Returns": st.column_config.TextColumn(
+            help="Games with a goal, assist, clean sheet (GK/DEF) or DC points / games played"),
+        "Streak": st.column_config.NumberColumn(
+            format="%d", help="Consecutive appearances with a return, up to his latest game"),
+        "Ret% next": st.column_config.NumberColumn(
+            format="%.0f%%", help="Chance of a return next GW: 75% his own return rate, 25% this fixture"),
         **{f"GW{g}": st.column_config.NumberColumn(format="%.1f") for g in gws},
     })
 

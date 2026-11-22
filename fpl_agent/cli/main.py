@@ -8,6 +8,7 @@ so you can simply run:
     python fpl_agent.py status           # what the agent remembers about your team
     python fpl_agent.py memory --help    # overrides, locked/banned players, notes
     python fpl_agent.py backtest         # check forecast accuracy on past gameweeks
+    python fpl_agent.py hypotheses       # re-test open hypotheses (run after each gameweek)
 
 Command-line flags override memory, which overrides values read from the API.
 """
@@ -34,6 +35,7 @@ from rich.table import Table
 from fpl_agent import engine
 from fpl_agent.data_ingest import FPLStore
 from fpl_agent.engine import POS, EngineError, Plan, PlanOptions
+from fpl_agent.forecast import hypotheses as hyp
 from fpl_agent.forecast.backtest import backtest as run_backtest
 from fpl_agent.memory import AgentMemory
 
@@ -105,6 +107,8 @@ _plan_options = [
                  help="How much bench players' EP counts (auto-sub value)."),
     click.option("--ft-value", type=float, default=1.0, show_default=True,
                  help="Points a saved free transfer is worth (higher = fewer, surer moves)."),
+    click.option("--consistency", type=float, default=0.5, show_default=True,
+                 help="Preference for players who return week after week (0 = pure xPts)."),
 ]
 
 
@@ -191,6 +195,7 @@ def _print_recommendation(plan: Plan) -> None:
     for col, kw in [("Pos", {}), ("Player", {}), ("Opp", {}), ("Mins", {"justify": "right"}),
                     ("xG/90", {"justify": "right"}), ("xA/90", {"justify": "right"}),
                     ("DC%", {"justify": "right"}), ("CS%", {"justify": "right"}),
+                    ("Returns", {"justify": "right"}), ("Ret%", {"justify": "right"}),
                     (f"xPts {gw}", {"justify": "right", "style": "bold"}),
                     ("xPts horizon", {"justify": "right"}), ("", {})]:
         xi.add_column(col, **kw)
@@ -202,7 +207,9 @@ def _print_recommendation(plan: Plan) -> None:
                 opp.get(team.get(pid), "—"), f"{f.get('exp_minutes', 0):.0f}",
                 f"{f.get('xg90', 0):.2f}", f"{f.get('xa90', 0):.2f}",
                 f"{f.get('dc_rate', 0) * 100:.0f}" if pos.get(pid) != 1 else "",
-                f"{f.get('cs_next', 0) * 100:.0f}", f"{f.get('expected_points_next', 0):.1f}",
+                f"{f.get('cs_next', 0) * 100:.0f}",
+                f"{int(f.get('returns', 0))}/{int(f.get('apps', 0))}" if f.get('apps', 0) else "",
+                f"{f.get('p_return_next', 0) * 100:.0f}", f"{f.get('expected_points_next', 0):.1f}",
                 f"{f.get('total_expected_points', 0):.1f}", role]
 
     for pid in rec.starting_xi:
@@ -212,7 +219,9 @@ def _print_recommendation(plan: Plan) -> None:
         xi.add_row(*[f"[dim]{c}[/]" for c in row(pid)])
     console.print(xi)
     console.print("[dim]Bench order as listed (GK slot first). DC% = chance of defensive-contribution "
-                  "points in a 60+ min game; CS% = clean-sheet chance.[/]")
+                  "points in a 60+ min game; CS% = clean-sheet chance; Returns = games with a goal, "
+                  "assist, clean sheet (GK/DEF) or DC points / games played; Ret% = chance of a "
+                  "return next GW.[/]")
 
     summary = (
         f"Projected {gw}: [bold]{rec.next_gw_points:.1f}[/] (XI + captain)\n"
@@ -549,6 +558,64 @@ def backtest(ctx: click.Context, horizon: int, windows: int) -> None:
             f"[bold]{m.at['xpts', top]:.1f}[/] pts each vs {m.at['ppg_baseline', top]:.1f}.")
     console.print("[dim]Lower MAE and higher correlation are better. topN_actual_avg is the real "
                   "average score of the model's top picks each gameweek.[/]")
+
+# -- hypotheses ---------------------------------------------------------------
+
+@cli.command()
+@click.option("--log", "log_path", type=click.Path(dir_okay=False), default=None,
+              help="Results log (default: hypothesis_log.json next to the database).")
+@click.pass_context
+def hypotheses(ctx: click.Context, log_path: str | None) -> None:
+    """Re-test open hypotheses on every completed gameweek and log the result.
+
+    Run after each gameweek (after `recommend` or `ui` has synced the data)
+    to see whether the evidence is building or fading.
+    """
+    store = FPLStore(db_path=ctx.obj["db"])
+    try:
+        players, history = store.players_df(), store.player_history_df()
+        fixtures, teams = store.fixtures_df(), store.teams_df()
+        scoring, gw = store.scoring_rules(), store.current_gameweek()
+    finally:
+        store.close()
+    if history.empty:
+        raise click.ClickException("No history cached. Run `recommend` or `ui` first to sync.")
+    last_done = gw - 1 if not fixtures[fixtures["event"] == gw]["finished"].fillna(0).all() else gw
+    cutoffs = list(range(hyp.MIN_CUTOFF, last_done))
+    if not cutoffs:
+        raise click.ClickException("Not enough completed gameweeks yet.")
+    with console.status(f"Testing on GW{cutoffs[0] + 1}–{last_done}…"):
+        preds = hyp.return_predictions(players, history, fixtures, teams, scoring, cutoffs)
+        res = hyp.check_outliers_in_tight_games(preds)
+    log_path = log_path or str(Path(ctx.obj["db"]).resolve().parent / "hypothesis_log.json")
+    trend = hyp.log_result(log_path, res, last_done)
+
+    console.print(f"[bold]H1 · outliers in tight games[/]  [dim]{hyp.H1_TEXT}[/]")
+    if "table" not in res:
+        console.print(f"[yellow]{res['verdict']}[/] ({res['n']} player-weeks)")
+        return
+    t = Table(title=f"MID/FWD, GW{res['gameweeks'][0]}–{res['gameweeks'][1]} "
+                    f"({res['n']} player-weeks)")
+    for col in ("Fixture", "Players", "Predicted", "Actual", "Actual ÷ predicted", "n"):
+        t.add_column(col, justify="left" if col in ("Fixture", "Players") else "right")
+    for r in res["table"]:
+        t.add_row(r["fixture"], r["profile"], f"{r['predicted']:.0%}", f"{r['actual']:.0%}",
+                  f"{r['ratio']:.2f}", f"{int(r['n'])}")
+    console.print(t)
+    ci = lambda k: f"[{res[k + '_ci'][0]:+.2f}, {res[k + '_ci'][1]:+.2f}]"  # noqa: E731
+    colour = {"supported": "green", "contradicted": "red"}.get(res["verdict"], "yellow")
+    console.print(
+        f"Hard fixtures, fringe − star: [bold]{res['hard_gap']:+.2f}[/] {ci('hard_gap')}  (H1 expects > 0)\n"
+        f"Easy fixtures, fringe − star: [bold]{res['easy_gap']:+.2f}[/] {ci('easy_gap')}  (H1 expects < 0)\n"
+        f"Difference (headline):        [bold]{res['interaction']:+.2f}[/] {ci('interaction')}  "
+        f"→ [{colour}]{res['verdict']}[/]")
+    console.print("[dim]Brackets are 95% intervals. 'Supported' needs the whole interval above 0.[/]")
+    if len(trend) > 1:
+        console.print("Trend: " + " · ".join(
+            f"GW{e['through_gw']} {e.get('interaction', float('nan')):+.2f} ({e['verdict']})"
+            for e in trend[-8:]))
+    console.print(f"[dim]Logged to {log_path}[/]")
+
 
 # -- ui -----------------------------------------------------------------------
 

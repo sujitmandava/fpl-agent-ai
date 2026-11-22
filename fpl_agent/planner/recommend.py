@@ -28,8 +28,9 @@ class Transfer:
     position: str = ""
     ep_gain_next: float = 0.0
     ep_gain_horizon: float = 0.0
-    # Near-equal options: [{"id", "name", "price", "xpts", "delta"}], delta =
-    # their horizon xPts − the buy's. Empty when the pick is clear.
+    # Near-equal options: [{"id", "name", "price", "xpts", "delta", "returns"}],
+    # delta = their horizon xPts − the buy's; returns = "9/11" (matches with a
+    # return / matches played). Empty when the pick is clear.
     alternatives: list[dict] = field(default_factory=list)
 
 
@@ -85,6 +86,7 @@ def build_recommendation(
     pid_to_ep = dict(zip(forecast["player_id"], forecast["total_expected_points"]))
     next_col = "expected_points_next" if "expected_points_next" in forecast.columns else "total_expected_points"
     pid_to_next = dict(zip(forecast["player_id"], forecast[next_col]))
+    pid_to_ret = return_labels(forecast)
 
     transfers = _pair_transfers_by_position(
         opt_result.transfers_out, opt_result.transfers_in,
@@ -101,6 +103,8 @@ def build_recommendation(
             t.alternatives = close_alternatives(t.buy_id, set(opt_result.selected_ids),
                                                 pid_to_name, pid_to_pos, pid_to_cost, pid_to_ep,
                                                 max_extra_cost=extra)
+            for a in t.alternatives:
+                a["returns"] = pid_to_ret.get(a["id"], "")
 
     # -- Lineup ---------------------------------------------------------------
     squad = opt_result.selected_ids
@@ -140,6 +144,7 @@ def build_recommendation(
         pid_to_name=pid_to_name,
         pid_to_next=pid_to_next,
         pid_to_team=pid_to_team,
+        pid_to_ret=pid_to_ret,
         upcoming=upcoming,
         opt_result=opt_result,
         delta=delta,
@@ -166,6 +171,23 @@ def build_recommendation(
 
 
 # -- Helpers ------------------------------------------------------------------
+
+def return_labels(forecast: pd.DataFrame) -> dict[int, str]:
+    """player_id → "returned 9/11, streak 6" (empty when no appearances)."""
+    if "returns" not in forecast.columns:
+        return {}
+    out = {}
+    for r in forecast.itertuples(index=False):
+        if not getattr(r, "apps", 0):
+            continue
+        label = f"returned {r.returns}/{r.apps}"
+        if getattr(r, "return_streak", 0) >= 3:
+            label += f", {r.return_streak} in a row"
+        elif getattr(r, "blanks_last4", 0) >= 2:
+            label += f", {r.blanks_last4} blanks in last 4"
+        out[int(r.player_id)] = label
+    return out
+
 
 def close_alternatives(
     buy_id: int, squad: set[int], pid_to_name: dict, pid_to_pos: dict,
@@ -288,6 +310,7 @@ def _generate_rationale(
     pid_to_next: dict[int, float],
     pid_to_team: dict[int, int],
     upcoming: dict[int, list[str]],
+    pid_to_ret: dict[int, str] | None = None,
     opt_result: OptimizationResult,
     delta: float,
     horizon_delta: float | None,
@@ -296,6 +319,8 @@ def _generate_rationale(
     """Explain the recommendation using the numbers behind it."""
     gw_label = f"GW{next_gw}" if next_gw else "next GW"
     fx = lambda pid: ", ".join(upcoming.get(pid_to_team.get(pid, -1), [])) or "n/a"  # noqa: E731
+    pid_to_ret = pid_to_ret or {}
+    ret = lambda pid: f"; {pid_to_ret[pid]}" if pid in pid_to_ret else ""  # noqa: E731
 
     lines: list[str] = []
     if transfers:
@@ -303,12 +328,14 @@ def _generate_rationale(
         for t in transfers:
             lines.append(
                 f"  [{t.position}] {t.sell_name} → {t.buy_name}: "
-                f"{t.ep_gain_next:+.1f} / {t.ep_gain_horizon:+.1f}  ({fx(t.buy_id) if t.buy_id else ''})"
+                f"{t.ep_gain_next:+.1f} / {t.ep_gain_horizon:+.1f}  "
+                f"({fx(t.buy_id) if t.buy_id else ''}{ret(t.buy_id)})"
             )
             for a in t.alternatives:
                 cost = a["price"] - t.buy_price
                 lines.append(f"      close call: {a['name']} {a['delta']:+.1f} xPts, "
-                             f"{'+' if cost >= 0 else '-'}£{abs(cost):.1f}m")
+                             f"{'+' if cost >= 0 else '-'}£{abs(cost):.1f}m"
+                             + (f" ({a['returns']})" if a.get("returns") else ""))
         if opt_result.transfer_cost:
             lines.append(f"  Hits: -{opt_result.transfer_cost} pts")
     else:

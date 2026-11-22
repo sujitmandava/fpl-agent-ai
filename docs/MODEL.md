@@ -100,6 +100,8 @@ Each player's habits, from his own match rows this season.
 | `yc90` | yellow cards per 90 | **card deductions** |
 | `xg90`, `xa90` | plain xG/xA per 90 | display only |
 | `variance` | variance of his last 8 scores | display only |
+| **`return_rate`** | share of his appearances with a return, recency-weighted, shrunk toward the position average by 4 appearances (`RETURN_SHRINK`) | **chance of a return**, consistency preference |
+| `returns`, `apps`, `return_streak`, `blanks_last4` | raw counts: "returned 9/11", "6 in a row", "2 blanks in last 4" | display, rationale |
 
 **Why role share instead of xG/90.** A player's xG/90 mixes two things: his
 role (how much of the team's attack goes through him) and how good the team's
@@ -112,6 +114,19 @@ during GW1–8). On accuracy alone it tested about the same as xG/90.
 carried into the next three gameweeks, but only 10–15% of his finishing above
 xG did. The model carries 15% (`FINISH_WEIGHT`). Raising it to 30% made the
 backtest worse.
+
+**Returns and consistency.** A *return* is a match where he did more than
+turn up: a goal, an assist, a clean sheet (GK/DEF with 60+ minutes) or
+defensive-contribution points. Anything else he played in is a *blank*.
+A MID's 1-point clean sheet, bonus on its own and GK save points don't count.
+xPts is an average, so it can't tell a player who returns most weeks from one
+who has a few big weeks between blank spells. Return rate measures that.
+
+In the walk-forward test, return rate did **not** predict extra points once
+xPts was known (correlation with the forecast's error: 0.01). It **did**
+predict *whether* a player returns: among the highest-xPts fifth, players
+with high return rates returned next week 63% of the time, and those with low
+rates 35%. So it is kept as a separate number, not folded into xPts.
 
 **Defensive contribution detection.** FPL's history doesn't say directly when
 DC points were awarded. The model rebuilds each match's points from every other
@@ -150,6 +165,36 @@ was 28.3%, with weak defences worst (16% predicted, 30% actual). With k = 4 the
 average is right, and GK/DEF under-prediction fell from −0.47 to −0.33 points
 per player-week. Goals conceded uses the same distribution.
 
+**Chance of a return** (`p_return_gw{N}`, `_return_chance`). Both parts
+depend on the opponent:
+
+* **Fixture model** (25%, `RETURN_MODEL_WEIGHT`): P(no return) =
+  exp(−(attacking + defensive)), where attacking = his share × his team's
+  expected goals in this fixture, and defensive = clean sheet (GK/DEF) + DC.
+* **His own return rate** (75%), adjusted for the opponent: his rate is
+  turned into a hazard (−ln(1 − rate)) and scaled by this fixture's hazard
+  ÷ his hazard in an average fixture. A striker away at the best defence
+  gets less; a defender facing a weak attack gets more, through the
+  clean-sheet odds. The same team-rating λ drives both sides of a match, so
+  one team's clean-sheet odds and the other team's attackers move together.
+
+Then × chance he plays, combined over a double, × availability. E.g. at
+GW11: Evanilson 68% at home to Coventry, 47% away at Arsenal; Haaland 36%
+away at Arsenal, 58% at home to Chelsea.
+
+Tested walk-forward (MID/FWD, fixture tiers by team expected goals):
+
+| Fixture | Actual | Before (only the 25% part saw the opponent) | Now |
+|---|---|---|---|
+| Hard | 24.0% | 23.8% | 21.7% |
+| Average | 24.8% | 25.0% | 25.0% |
+| Easy | 28.3% | 23.9% | 26.0% |
+
+Overall log-loss is the same (0.590 vs 0.589); the adjusted version is kept
+because it follows the fixture, which the unadjusted one didn't. The fixture
+part alone under-predicts (22% vs 32% actual), mostly because FPL awards more
+assists than xA implies, so it gets only 25%.
+
 **Per gameweek:** blank = 0, double = sum of both fixtures. Then × availability:
 `chance_of_playing_next_round` for the next GW, recovering linearly to 100% over
 4 GWs (`RECOVERY_GWS`); players who left the club = 0.
@@ -166,6 +211,9 @@ per player-week. Goals conceded uses the same distribution.
 | clean-sheet odds | `CS_DISPERSION` (lower = more spread; very large = Poisson) |
 | xG vs goals for team strength | `XG_WEIGHT` |
 | early-season reliance on FPL's strengths | `PRIOR_MATCHES` |
+| what counts as a return | `returned()` |
+| fixture vs own record in the chance of a return | `RETURN_MODEL_WEIGHT` |
+| how much the optimiser prefers steady returners | `consistency` (`--consistency`, dashboard slider; `CONSISTENCY` in `milp.py`) |
 | a new scoring rule | add a line in `_fixture_points` and a profile rate in `player_profiles` |
 
 Always re-run the backtest after a change (`python fpl_agent.py backtest`, or
@@ -180,6 +228,7 @@ gameweek in the horizon:
 
 ```
 maximise  Σ_gw 0.85^k · Σ_player xPts · (in XI + is captain + 0.1 × on bench)
+          + consistency · Σ_gw 0.85^k · Σ_starter (P(return) − position average)
           − 4 × hits − ft_value × free transfers used
 ```
 
@@ -187,6 +236,14 @@ maximise  Σ_gw 0.85^k · Σ_player xPts · (in XI + is captain + 0.1 × on benc
 * **Bench weight 0.1**: bench points matter a little (auto-subs).
 * **ft_value** (default 1): a transfer must be worth more than keeping it in
   the bank; a hit must beat 4 + ft_value.
+* **consistency** (default 0.5): prefers starters who return more often than
+  their position's average. At 0.5, being 20 points more likely to return is
+  worth 0.1 xPts a week, so it settles close calls but doesn't override a clear
+  xPts gap. It is relative to position, so it never changes the formation,
+  and it doesn't affect the captain, where upside matters more. In the
+  backtest, leaning harder on it cost points (top-20 average 4.98 at 0,
+  4.88 at 0.5, 4.74 at 2) without making the picks return more often, so
+  keep it modest.
 * **Rules**: budget (selling prices for players you own), 2/5/5/3, ≤3 per club,
   a valid formation every week, locked and banned players from memory.
 
@@ -198,7 +255,9 @@ Turns the solution into transfers, lineup, captain and a rationale.
 
 **Close calls.** For each player bought, other players at the same position
 within **1 xPt over the horizon** (or 5% of his total, whichever is larger) and
-affordable with the money left after the plan's transfers. These are listed
+affordable with the money left after the plan's transfers. Each buy and
+alternative shows his return record ("returned 9/11, 9 in a row") so you can
+take the steadier one. These are listed
 because the model can't tell them apart with confidence. The choice between
 them is yours, and is where league ownership matters. The 3-per-club rule is not
 checked for alternatives. If the captain and vice are within 0.3 xPts, the
@@ -272,5 +331,41 @@ them.
 * **Goalkeeper shot-stopping.** FPL gives xG conceded before the shot, not
   post-shot xG, so a keeper's saving skill can't be separated from luck.
 * **Set-piece roles, price changes, bookmaker odds.** Not used.
+* **Who returns in hard fixtures.** In the walk-forward test, high-xPts
+  attackers did worse than predicted in hard fixtures (actual ÷ predicted
+  0.91) and better in easy ones (1.26); lower-xPts players did the opposite in
+  hard fixtures (1.19). That suggests stars are more fixture-sensitive than a
+  plain "share × team goals" model says, and returns in tight games spread to
+  unexpected players. Only ~140 player-weeks per group and the middle tier
+  doesn't fit, so it isn't modelled yet. It is re-tested every week as
+  hypothesis **H1** (see below).
+* **DC vs opponent.** Defensive-contribution rates don't depend on the
+  opponent, though facing a strong attack probably means more defending.
+* **Early-season position priors.** "Regulars" need 900+ minutes, which
+  nobody has until about GW10, so priors for shares and per-90 rates are 0
+  before then. The return-rate prior uses all 60+ minute appearances to avoid
+  this; the others still need the same fix.
 * **Overall under-prediction** of about 0.3–0.4 points per player-week; worth
   investigating, probably bonus and the prior discount.
+
+---
+
+## 10. Open hypotheses (`forecast/hypotheses.py`)
+
+Ideas that aren't in the model yet because the evidence is thin. They are
+re-tested after every gameweek:
+
+```
+python fpl_agent.py hypotheses
+```
+
+Each run uses only data available before each predicted week, prints the
+result with 95% bootstrap intervals, and logs it to `hypothesis_log.json`
+(next to the database) so the trend across weeks is visible.
+
+| ID | Hypothesis | Headline number | Status at GW11 |
+|---|---|---|---|
+| H1 | In hard-to-score fixtures, lower-xPts attackers beat their predicted chance of a return and stars fall short; in easy fixtures stars beat theirs | (fringe − star) in hard fixtures minus the same in easy fixtures; actual ÷ predicted returns | +0.55, interval −0.10 to +1.17: **not yet clear** |
+
+When a hypothesis is "supported" for several weeks in a row, build it into
+the model and check the backtest. If it's "contradicted", drop it.
