@@ -1,5 +1,6 @@
-import Pending from "@/components/Pending";
+import LeagueView from "@/components/LeagueView";
 
-export default function Page() {
-  return <Pending title="League" what="Standings, rivals' captains and chips, you against any rival, and who your league owns." />;
+export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <LeagueView teamId={Number(id)} />;
 }

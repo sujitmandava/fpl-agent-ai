@@ -68,10 +68,13 @@ export interface Rival {
   captain: number | null;
   active_chip: string | null;
   chips_now: string[];
+  chips_later: string[];
   squad: number[];
   shared: number[];
   mine_only: number[];
   theirs_only: number[];
+  /** Points after hits in each gameweek both played, oldest first. */
+  weekly: { gw: number; you: number; them: number }[];
   by_gw: { gw: number; you: number | null; them: number | null; edge: number | null; your_captain: number | null; their_captain: number | null }[];
 }
 
@@ -81,9 +84,12 @@ export interface League {
   gw: number;
   size: number;
   partial: boolean;
+  loaded: number; // managers whose squads were fetched (the top of a big league, plus you)
   my_rank: number;
   my_total: number;
   standings: Standing[];
+  /** Rivals only (you excluded). EO counts the captain twice and the bench zero. */
+  ownership: { rivals: number; rows: { id: number; owners: number; captains: number; eo: number | null }[] };
   rival: Rival | null;
 }
 

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SlidersHorizontal, ChevronRight } from "lucide-react";
-import { ApiError, fetchPlan } from "@/lib/api";
-import { rememberTeam, useTeamSettings } from "@/lib/settings";
+import type { ApiError } from "@/lib/api";
+import { usePlan } from "@/lib/usePlan";
 import type { Move, Plan, PlayerCard } from "@/lib/types";
 import { deadline, firstName, fixed, ordinal, pct, signed, signedInt } from "@/lib/format";
 import Board, { Bench } from "./Board";
@@ -13,37 +13,6 @@ import { useTeamStatus } from "./Shell";
 import PlayerSheet from "./PlayerSheet";
 import OptionsSheet from "./OptionsSheet";
 import styles from "./PlanView.module.css";
-
-function usePlan(teamId: number) {
-  const { settings, update, ready } = useTeamSettings(teamId);
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [error, setError] = useState<ApiError | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fresh, setFresh] = useState(0);
-
-  useEffect(() => {
-    if (!ready) return;
-    const ctrl = new AbortController();
-    setLoading(true);
-    fetchPlan(teamId, settings, ctrl.signal, fresh > 0)
-      .then((p) => {
-        setPlan(p);
-        setError(null);
-        rememberTeam(teamId, p.team.name);
-      })
-      .catch((e) => {
-        if (ctrl.signal.aborted) return;
-        setError(e instanceof ApiError ? e : new ApiError(String(e), 0));
-      })
-      .finally(() => {
-        if (!ctrl.signal.aborted) setLoading(false);
-      });
-    return () => ctrl.abort();
-  }, [teamId, settings, ready, fresh]);
-
-  const refresh = useCallback(() => setFresh((n) => n + 1), []);
-  return { plan, error, loading, settings, update, refresh };
-}
 
 export default function PlanView({ teamId }: { teamId: number }) {
   const { plan, error, loading, settings, update, refresh } = usePlan(teamId);
@@ -247,7 +216,11 @@ export default function PlanView({ teamId }: { teamId: number }) {
   );
 }
 
-function Stake({ plan, onRival, onLeague }: { plan: Plan; onRival: (e: number) => void; onLeague: (id: number) => void }) {
+export function Stake({ plan, onRival, onLeague, detail = true }: {
+  plan: Plan; onRival: (e: number) => void; onLeague: (id: number) => void;
+  /** Edge and finish chance beside the figure; off where a plate already sets them. */
+  detail?: boolean;
+}) {
   const league = plan.league;
   const rival = league?.rival;
 
@@ -283,11 +256,11 @@ function Stake({ plan, onRival, onLeague }: { plan: Plan; onRival: (e: number) =
           </label>
           {" · "}{ordinal(league.my_rank)} of {league.size}
         </p>
-        <p>
-          Edge {signed(rival.edge_per_gw)}/GW · {pct(rival.p_ahead)} to finish above
+        {(detail || plan.leagues.length > 1) && <p>
+          {detail && <>Edge {signed(rival.edge_per_gw)}/GW · {pct(rival.p_ahead)} to finish above</>}
           {plan.leagues.length > 1 && (
             <>
-              {" · "}
+              {detail && " · "}
               <label className={styles.rivalPick}>
                 <span className="sr-only">League</span>
                 <select value={league.id} onChange={(e) => onLeague(Number(e.target.value))}>
@@ -296,7 +269,7 @@ function Stake({ plan, onRival, onLeague }: { plan: Plan; onRival: (e: number) =
               </label>
             </>
           )}
-        </p>
+        </p>}
       </div>
     </section>
   );
@@ -393,7 +366,7 @@ function CloseCalls({ moves, players }: { moves: Move[]; players: Record<string,
   );
 }
 
-function Skeleton() {
+export function Skeleton() {
   return (
     <div className={styles.page} aria-busy="true">
       <header className={styles.top}>
@@ -407,7 +380,7 @@ function Skeleton() {
   );
 }
 
-function Failure({ error, retry }: { error: ApiError; retry: () => void }) {
+export function Failure({ error, retry }: { error: ApiError; retry: () => void }) {
   const notFound = error.status === 404;
   return (
     <div className={styles.failure}>

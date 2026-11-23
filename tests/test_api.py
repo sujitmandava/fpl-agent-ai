@@ -51,3 +51,25 @@ def test_options_reach_the_engine(client, monkeypatch):
 def test_bad_params_rejected(client):
     assert client.get("/api/team/5/plan?horizon=9").status_code == 422
     assert client.get("/api/team/5/plan?chip=bboost").status_code == 422
+
+
+def test_league_payload_race_and_ownership():
+    import pandas as pd
+    from tests.test_league import BASE, CHIP_DEFS, POSITIONS, FakeClient
+    from fpl_agent.league import fetch_league
+
+    snap = fetch_league(FakeClient(), 1, gw=4, me=100, chip_defs=CHIP_DEFS)
+    players = pd.DataFrame({"id": list(POSITIONS), "element_type": list(POSITIONS.values())})
+    forecast = pd.DataFrame({"player_id": list(POSITIONS), "expected_points_gw5": [2.0] * len(POSITIONS)})
+    out, eo, rival, ids = api.league_payload(snap, forecast, players, BASE, [5], rival_entry=300)
+
+    assert rival.entry == 300 and out["rival"]["entry"] == 300
+    # Weekly points line up by gameweek and add up to the standings gap.
+    weekly = out["rival"]["weekly"]
+    assert [w["gw"] for w in weekly] == [1, 2, 3, 4]
+    assert sum(w["you"] - w["them"] for w in weekly) == out["rival"]["gap"] == 20
+    # Ownership covers rivals only, and every captain and owned player gets a card.
+    assert out["ownership"]["rivals"] == 2
+    assert out["ownership"]["rows"][0] == {"id": 13, "owners": 2, "captains": 1, "eo": 150.0}
+    assert {16, 17, 13} <= ids and eo[16] == 100.0
+    assert out["loaded"] == 3 and [s["is_me"] for s in out["standings"]] == [False, True, False]

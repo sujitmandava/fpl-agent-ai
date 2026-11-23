@@ -146,6 +146,68 @@ def _formation(plan: Plan) -> str:
     return "-".join(str(x) for x in n)
 
 
+OWNERSHIP_ROWS = 20
+
+
+def league_payload(league, forecast: pd.DataFrame, players: pd.DataFrame, my_squad: list[int],
+                   gws: list[int], rival_entry: int | None = None):
+    """The ``league`` block of the plan payload.
+
+    Returns ``(payload, eo, rival, player_ids)``: league EO by player, the
+    chosen rival (or None), and every player id the block refers to, so the
+    caller can ship a card for each.
+    """
+    from fpl_agent.league import head_to_head, league_ownership
+
+    me = league.mine
+    own = league_ownership(league)
+    eo = own.set_index("player_id")["eo_pct"].to_dict() if not own.empty else {}
+    others = [r for r in league.rivals if r.entry != league.me]
+    rival = next((r for r in others if r.entry == rival_entry), None) or league.target
+    ids = {r.captain for r in league.rivals if r.captain is not None}
+    top = own.head(OWNERSHIP_ROWS)
+    ids |= set(top["player_id"].astype(int))
+
+    h2h = None
+    if rival is not None:
+        h = head_to_head(league, rival.entry, forecast, players, my_squad, gws)
+        ids |= set(rival.squad)
+        h2h = {
+            "entry": rival.entry, "team_name": rival.team_name, "manager_name": rival.manager_name,
+            "rank": rival.rank, "gap": me.total - rival.total,
+            "edge_per_gw": _num(h.edge_per_gw), "weekly_sd": _num(h.weekly_sd),
+            "p_ahead": _num(h.p_ahead), "remaining": h.remaining,
+            "captain": rival.captain, "active_chip": rival.active_chip,
+            "chips_now": rival.chips_now, "chips_later": rival.chips_later, "squad": rival.squad,
+            "shared": h.shared, "mine_only": h.mine_only, "theirs_only": h.theirs_only,
+            # Points after hits in each gameweek both of you played, for the race line.
+            "weekly": [{"gw": g, "you": me.weekly[g], "them": rival.weekly[g]}
+                       for g in sorted(set(me.weekly) & set(rival.weekly))],
+            "by_gw": [{"gw": int(r.gw), "you": _num(r.you), "them": _num(r.them),
+                       "edge": _num(r.edge), "your_captain": r.your_captain,
+                       "their_captain": r.their_captain}
+                      for r in h.by_gw.itertuples()],
+        }
+    payload = {
+        "id": league.league_id, "name": league.name, "gw": league.gw, "size": league.size,
+        "partial": league.partial, "loaded": len(league.rivals),
+        "my_rank": me.rank, "my_total": me.total,
+        "standings": [{"entry": r.entry, "team_name": r.team_name, "manager_name": r.manager_name,
+                       "rank": r.rank, "total": r.total, "gw_points": r.gw_points,
+                       "gap": me.total - r.total, "captain": r.captain,
+                       "active_chip": r.active_chip, "chips_now": r.chips_now,
+                       "is_me": r.entry == league.me}
+                      for r in league.rivals],
+        "ownership": {
+            "rivals": int(own.attrs.get("n", 0)),
+            "rows": [{"id": int(r.player_id), "owners": int(r.owners), "captains": int(r.captains),
+                      "eo": _num(r.eo_pct)} for r in top.itertuples()],
+        },
+        "rival": h2h,
+    }
+    return payload, eo, rival, ids
+
+
 def plan_payload(plan: Plan, rival_entry: int | None = None) -> dict:
     setup, rec, res = plan.setup, plan.rec, plan.result
     mem = setup.memory.data.get("manager", {})
@@ -158,43 +220,13 @@ def plan_payload(plan: Plan, rival_entry: int | None = None) -> dict:
     eo: dict[int, float] = {}
     league_out = None
     rival = None
+    league_ids: set[int] = set()
     if league is not None and league.mine is not None:
-        from fpl_agent.league import head_to_head, league_ownership
-        own = league_ownership(league)
-        eo = own.set_index("player_id")["eo_pct"].to_dict() if not own.empty else {}
-        others = [r for r in league.rivals if r.entry != league.me]
-        rival = next((r for r in others if r.entry == rival_entry), None) or league.target
-        me = league.mine
-        h2h = None
-        if rival is not None:
-            h = head_to_head(league, rival.entry, plan.forecast, setup.players, setup.state.squad, gws)
-            h2h = {
-                "entry": rival.entry, "team_name": rival.team_name, "manager_name": rival.manager_name,
-                "rank": rival.rank, "gap": me.total - rival.total,
-                "edge_per_gw": _num(h.edge_per_gw), "weekly_sd": _num(h.weekly_sd),
-                "p_ahead": _num(h.p_ahead), "remaining": h.remaining,
-                "captain": rival.captain, "active_chip": rival.active_chip,
-                "chips_now": rival.chips_now, "squad": rival.squad,
-                "shared": h.shared, "mine_only": h.mine_only, "theirs_only": h.theirs_only,
-                "by_gw": [{"gw": int(r.gw), "you": _num(r.you), "them": _num(r.them),
-                           "edge": _num(r.edge), "your_captain": r.your_captain,
-                           "their_captain": r.their_captain}
-                          for r in h.by_gw.itertuples()],
-            }
-        league_out = {
-            "id": league.league_id, "name": league.name, "gw": league.gw, "size": league.size,
-            "partial": league.partial, "my_rank": me.rank, "my_total": me.total,
-            "standings": [{"entry": r.entry, "team_name": r.team_name, "manager_name": r.manager_name,
-                           "rank": r.rank, "total": r.total, "gw_points": r.gw_points,
-                           "gap": me.total - r.total, "captain": r.captain,
-                           "active_chip": r.active_chip, "chips_now": r.chips_now,
-                           "is_me": r.entry == league.me}
-                          for r in league.rivals],
-            "rival": h2h,
-        }
+        league_out, eo, rival, league_ids = league_payload(
+            league, plan.forecast, setup.players, setup.state.squad, gws, rival_entry)
 
     rival_squad = set(rival.squad) if rival is not None else set()
-    ids = set(setup.state.squad) | set(rec.starting_xi) | set(rec.bench) | rival_squad
+    ids = set(setup.state.squad) | set(rec.starting_xi) | set(rec.bench) | league_ids
     for t in rec.transfers:
         ids |= {t.sell_id, t.buy_id} | {a["id"] for a in t.alternatives}
 

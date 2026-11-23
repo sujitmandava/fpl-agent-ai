@@ -285,6 +285,8 @@ From 760px the work area becomes two columns: the board (up to 540px) with the s
 
 **The Board-First Rule.** On every working screen the framed board is the largest object in the first viewport; tables and long copy live below it.
 
+The League screen keeps the Plan grid: stake line, race board left with the "Head to head" plate right from 760px (stacked on phones), then full-width sections below: standings (your row on a 6% blue wash with a "You" pill; the rival marked by their letter disc; tapping a manager makes them the rival), the two "Only you" / "Only rival" lists side by side, the gameweek table with "Projected" and "Played" row groups on a wall-coloured head, and who the league owns.
+
 ## Elevation & Depth
 
 Depth is physical and small: magnets sit on the board, the board sits in its frame, the frame and panels hang off the wall. Shadows are soft, ink-tinted, never coloured except the primary button's soft blue glow. No hard offset shadows anywhere. The board itself is recessed with an inner shadow; nothing on the wall floats more than the frame.
@@ -303,7 +305,7 @@ Depth is physical and small: magnets sit on the board, the board sits in its fra
 
 ## Shapes
 
-Round magnets (50%), a frame with gently rounded corners (12px outer, 6px board), plates and the ID field at 10px, controls at 8px, tiny badges and code chips at 4px, pills (99px) for toggles, the Options button and tags. Bottom sheets round their top corners at 16px; the desktop side sheet is square. Lines are hairline: pitch markings at a non-scaling 0.45 stroke, the out lane a 2-2 dashed rule. The dashed stroke is reserved for "leaving": the outgoing counter's ring and the rival picker's underline are the only dashes.
+Round magnets (50%), a frame with gently rounded corners (12px outer, 6px board), plates and the ID field at 10px, controls at 8px, tiny badges and code chips at 4px, pills (99px) for toggles, the Options button and tags. Bottom sheets round their top corners at 16px; the desktop side sheet is square. Lines are hairline: pitch markings at a non-scaling 0.45 stroke, the out lane a 2-2 dashed rule. The dashed stroke is reserved for "leaving": the outgoing counter's ring and the rival picker's underline are the only dashes. A dotted stroke (round dots, never dashes) means "projected": the race board's projection is the only one.
 
 ## Components
 
@@ -315,6 +317,9 @@ Outgoing players stand in a dashed-ruled lane at the left edge of the board labe
 
 ### Marker Arrow and Annotation
 The board is a 100 by 98 field (aspect ratio 100/98). Each transfer is a red marker stroke (1.15 units, round caps, 1.5 when selected) from the ghost to the incoming counter, with an arrowhead. On load or re-solve the strokes draw in over 640ms on the standard ease, staggered 120ms plus 140ms per arrow. The gain is written in marker above the arrow's midpoint, rotated -4 degrees. Selecting a move dims the other arrows and gains to 28%. With no transfers, the lane carries a marker note ("Roll it"). The figcaption key underneath explains the xPts figure, the arrow and the rival mark in type.
+
+### Race Board
+The League screen's board: the same frame and melamine at 100 by 62. The rival is the level line (ink-3, 1px) with their white letter disc at its right end; your gap after each gameweek is a black marker stroke (0.95 units, round caps and joins) above level when you're ahead, below when behind. Past today it continues as a dotted marker stroke on the model's weekly edge, inside a board-line band one weekly swing wide per square root of weeks ahead. Today is a hairline in frame colour with your blue magnet (clamp(26px, 7.4vw, 32px), gloss, magnet shadow) set on the line. Gridlines are board-line hairlines; values, "Level", GW ticks and "Projected" are set in the 10px label face, today's GW in ink. One marker note writes the weekly edge on the side away from level, repeating the plate's "Edge per GW". The key names the magnet, both strokes and the level line, and a "Gameweek by gameweek" table below types every point, played and projected. On load or rival change the stroke draws over 640ms after 120ms; band, dots and note fade in from 780ms, and the magnet is set down from a lift at 760ms. Reduced motion shows it all in place.
 
 ### Reversed Plate
 The one dark object on the screen: plate background, 10px radius, panel shadow, 14px 16px padding. Head in 22px title type with the bank and free transfers right-aligned in plate-mute. Each row: the move in 16px bold, the proof line in plate-mute, the stance against the rival in plate-text, and the gain right-aligned in condensed yellow with its horizon caption. Rows are buttons separated by plate-2 rules; hover lifts to 4% white, pressed carries an 8% yellow wash, focus rings are yellow. It closes with three totals in 22px condensed and a plate-mute note.
