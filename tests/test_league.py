@@ -65,6 +65,39 @@ def test_fetch_league_standings_and_chips(snap):
     assert "Wildcard" in snap.mine.chips_now
 
 
+class BigLeagueClient(FakeClient):
+    """A public league: you're far below its first page, and it started in GW3."""
+
+    def get_league_standings(self, league_id, page=1):
+        data = super().get_league_standings(league_id, page)
+        data["league"]["start_event"] = 3
+        data["standings"]["has_next"] = True
+        data["standings"]["results"] = [r for r in data["standings"]["results"] if r["entry"] != 100]
+        return data
+
+    def get_entry(self, manager_id):
+        return {"name": "T100", "player_first_name": "Me", "player_last_name": "Self",
+                "leagues": {"classic": [{"id": 1, "entry_rank": 5000, "rank_count": 90000}]}}
+
+    def get_manager_history(self, entry):
+        hist = super().get_manager_history(entry)
+        running = 0
+        for h in hist["current"]:
+            running += h["points"]
+            h["total_points"] = running
+        return hist
+
+
+def test_big_league_adds_your_row_from_your_profile():
+    snap = fetch_league(BigLeagueClient(), 1, gw=4, me=100, chip_defs=CHIP_DEFS)
+    me = snap.mine
+    assert me is not None and me.rank == 5000 and me.manager_name == "Me Self"
+    assert me.total == 70 + 40                   # counted from GW3, when the league started
+    assert set(me.weekly) == {3, 4} and set(snap.get(200).weekly) == {3, 4}
+    assert snap.size == 90000 and snap.partial
+    assert snap.target.entry == 200
+
+
 def test_league_ownership_counts_captaincy(snap):
     raw = league_ownership(snap)
     assert raw.attrs["n"] == 2            # you are excluded

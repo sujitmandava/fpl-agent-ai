@@ -134,7 +134,9 @@ class Setup:
 
     @property
     def leagues(self) -> list[dict]:
-        """Your private classic leagues: [{"id", "name", "rank"}]."""
+        """Your classic leagues, private first: [{"id", "name", "rank", "size", "private"}].
+
+        Snapshots from before public leagues were kept hold only private ones."""
         return self.memory.data.get("manager", {}).get("leagues", [])
 
     @property
@@ -234,11 +236,12 @@ def load_league(setup: Setup, league_id: int | None = None, client: FPLClient | 
     """Fetch a mini-league into ``setup.league``; failures become a note.
 
     League choice: *league_id*, else ``FPL_LEAGUE_ID``, else your first
-    private league.
+    private league. Public leagues load only when asked for by id.
     """
     if league_id is None:
         env = os.environ.get("FPL_LEAGUE_ID")
-        league_id = int(env) if env else (setup.leagues[0]["id"] if setup.leagues else None)
+        private = [lg for lg in setup.leagues if lg.get("private", True)]
+        league_id = int(env) if env else (private[0]["id"] if private else None)
     if not league_id:
         return None
     try:

@@ -110,11 +110,14 @@ class AgentMemory:
         bought = getattr(state, "purchase_prices", {}) or {}
 
         entry = state.entry or {}
-        leagues = [
-            {"id": lg.get("id"), "name": lg.get("name"), "rank": lg.get("entry_rank")}
-            for lg in (entry.get("leagues", {}) or {}).get("classic", [])
-            if lg.get("league_type") == "x"   # private (invitational) leagues
-        ]
+        # Every classic league, private (invitational) ones first: those are the
+        # mini-leagues worth planning against; public ones compare with the top.
+        leagues = sorted(
+            ({"id": lg.get("id"), "name": lg.get("name"), "rank": lg.get("entry_rank"),
+              "size": lg.get("rank_count"), "private": lg.get("league_type") == "x"}
+             for lg in (entry.get("leagues", {}) or {}).get("classic", [])),
+            key=lambda lg: not lg["private"],
+        )
         self.data.update(
             season=season,
             synced_at=_now(),

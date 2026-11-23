@@ -81,13 +81,24 @@ def fetch_league(client, league_id: int, gw: int, me: int, chip_defs: list[dict]
                  max_rivals: int = 10) -> LeagueSnapshot:
     """Standings plus the top *max_rivals* managers' picks and history.
 
-    You are always included, even if you're below the cut.
+    You are always included, even if you're below the cut. In a big public
+    league you won't be on the first page of standings, so your row is built
+    from your own profile and history instead.
     """
     data = client.get_league_standings(league_id)
+    league = data.get("league", {})
+    start = int(league.get("start_event") or 1)
     results = data["standings"]["results"]
+    has_next = bool(data["standings"].get("has_next"))
     top = results[:max_rivals]
     if me not in {r["entry"] for r in top}:
         top += [r for r in results if r["entry"] == me]
+    size = len(results)
+    if me not in {r["entry"] for r in top} or has_next:
+        mine, rank_count = _my_row(client, league_id, me, start)
+        if mine is not None and me not in {r["entry"] for r in top}:
+            top.append(mine)
+        size = max(size, rank_count or 0)
     rivals = []
     for r in top:
         rv = Rival(entry=int(r["entry"]), team_name=r["entry_name"], manager_name=r["player_name"],
@@ -101,17 +112,38 @@ def fetch_league(client, league_id: int, gw: int, me: int, chip_defs: list[dict]
             rv.active_chip = picks.get("active_chip")
             eh = picks.get("entry_history") or {}
             rv.bank, rv.value = int(eh.get("bank") or 0), int(eh.get("value") or 0)
-        hist = client.get_manager_history(rv.entry)
+        hist = r.get("_history") or client.get_manager_history(rv.entry)
+        # Only the gameweeks this league counts (some start mid-season).
         rv.weekly = {int(h["event"]): int(h["points"]) - int(h.get("event_transfers_cost") or 0)
-                     for h in hist.get("current", [])}
+                     for h in hist.get("current", []) if int(h["event"]) >= start}
         played = [{"name": c["name"], "event": int(c["event"])} for c in hist.get("chips", [])]
         rv.chips = chip_status(chip_defs, played, gw + 1)
         rivals.append(rv)
     rivals.sort(key=lambda r: r.rank)
-    league = data.get("league", {})
-    has_next = bool(data["standings"].get("has_next"))
     return LeagueSnapshot(league_id=league_id, name=league.get("name", str(league_id)), gw=gw,
-                          me=me, rivals=rivals, size=len(results), partial=has_next or len(results) > len(top))
+                          me=me, rivals=rivals, size=size, partial=has_next or len(results) > len(top))
+
+
+def _my_row(client, league_id: int, me: int, start: int) -> tuple[dict | None, int | None]:
+    """Your standings row and the league's size, from your own profile.
+
+    Used when you're beyond the first page of a big league. The league total
+    counts from its start gameweek, so it's rebuilt from your history.
+    """
+    entry = client.get_entry(me)
+    lg = next((x for x in (entry.get("leagues", {}) or {}).get("classic", [])
+               if int(x.get("id", 0)) == league_id), None)
+    if lg is None or not lg.get("entry_rank"):
+        return None, None
+    hist = client.get_manager_history(me)
+    current = hist.get("current", [])
+    before = [h for h in current if int(h["event"]) < start]
+    total = int(current[-1]["total_points"]) - (int(before[-1]["total_points"]) if before else 0) if current else 0
+    name = " ".join(x for x in (entry.get("player_first_name"), entry.get("player_last_name")) if x)
+    row = {"entry": me, "entry_name": entry.get("name") or str(me), "player_name": name or str(me),
+           "rank": int(lg["entry_rank"]), "total": total,
+           "event_total": int(current[-1]["points"]) if current else 0, "_history": hist}
+    return row, (int(lg["rank_count"]) if lg.get("rank_count") else None)
 
 
 def league_ownership(snap: LeagueSnapshot, exclude_me: bool = True) -> pd.DataFrame:

@@ -3,6 +3,28 @@
 
 .full { grid-column: 1 / -1; }
 
+/* -- League picker: the page title itself, with the stake line's dashed underline */
+
+/* Padding inside the title's overflow box so the focus ring isn't clipped. */
+.leaguePick { display: block; min-width: 0; margin: -4px; padding: 4px; }
+
+.leaguePick select {
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0 22px 0 0;
+  border: 0;
+  border-bottom: 1.5px dashed var(--ink-3);
+  border-radius: 0;
+  background: transparent url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='7'><path d='M1 1l5 5 5-5' fill='none' stroke='%2315181c' stroke-width='1.8'/></svg>") no-repeat right center;
+  appearance: none;
+  font: inherit;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.leaguePick select:hover { border-bottom-color: var(--ink); }
+.leaguePick select:disabled { cursor: progress; opacity: 0.7; }
+
 /* -- Standings ------------------------------------------------------------ */
 
 .who { white-space: normal !important; min-width: 0; }

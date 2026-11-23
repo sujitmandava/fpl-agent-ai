@@ -329,7 +329,9 @@ def plan_payload(plan: Plan, rival_entry: int | None = None) -> dict:
                         "bench_points": _num(res.bench_points.get(g, 0))} for g in res.gameweeks],
         "players": _player_cards(plan, ids, gws, next_gw, eo, rival_squad),
         "league": league_out,
-        "leagues": setup.leagues,
+        "leagues": [{"id": lg["id"], "name": lg["name"], "rank": lg.get("rank"),
+                     "size": lg.get("size"), "private": lg.get("private", True)}
+                    for lg in setup.leagues],
         "notes": setup.notes + setup.state.notes,
         "synced": setup.synced,
         "rationale": rec.rationale,

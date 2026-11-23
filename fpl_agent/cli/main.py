@@ -363,7 +363,7 @@ def _print_memory(memory: AgentMemory) -> None:
         console.print("Banned: " + (", ".join(p["name"] for p in d["banned"]) or "—"))
     for i, n in enumerate(d.get("notes", [])):
         console.print(f"Note {i}: {n['text']} [dim]({n['added_at'][:10]})[/]")
-    leagues = mgr.get("leagues", [])
+    leagues = [lg for lg in mgr.get("leagues", []) if lg.get("private", True)]
     if leagues:
         console.print("Mini-leagues: " + ", ".join(f"{lg['name']} (#{lg['rank']})" for lg in leagues))
     if d.get("recommendations"):
