@@ -1,6 +1,6 @@
 """Persistent agent memory: your FPL setup between runs.
 
-One readable JSON file per team (the CLI and dashboard use
+One readable JSON file per team (the CLI and API use
 ``<FPL_MEMORY_DIR>/<team id>.json``, default ``memory/``), separate from the
 SQLite cache so season or schema resets never erase it. Any tool or agent can
 read it.

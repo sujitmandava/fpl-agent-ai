@@ -8,7 +8,7 @@ rest.
 The pipeline has four stages:
 
 ```
-FPL API ──► data_ingest ──► forecast ──────────────► optimizer ──► planner ──► CLI / dashboard
+FPL API ──► data_ingest ──► forecast ──────────────► optimizer ──► planner ──► CLI / API → web
             (SQLite)        team ratings              (MILP)       (rationale,       ▲
                             player profiles                         close calls)     │
                             points per fixture                                       │
@@ -213,11 +213,10 @@ assists than xA implies, so it gets only 25%.
 | early-season reliance on FPL's strengths | `PRIOR_MATCHES` |
 | what counts as a return | `returned()` |
 | fixture vs own record in the chance of a return | `RETURN_MODEL_WEIGHT` |
-| how much the optimiser prefers steady returners | `consistency` (`--consistency`, dashboard slider; `CONSISTENCY` in `milp.py`) |
+| how much the optimiser prefers steady returners | `consistency` (`--consistency`, web app Options slider; `CONSISTENCY` in `milp.py`) |
 | a new scoring rule | add a line in `_fixture_points` and a profile rate in `player_profiles` |
 
-Always re-run the backtest after a change (`python fpl_agent.py backtest`, or
-the dashboard's Model check tab).
+Always re-run the backtest after a change (`python fpl_agent.py backtest`).
 
 ---
 

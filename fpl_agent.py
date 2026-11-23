@@ -4,7 +4,7 @@
 Usage:
     python fpl_agent.py refresh
     python fpl_agent.py recommend --manager-id <your team ID>
-    python fpl_agent.py ui
+    python fpl_agent.py api
 """
 
 from fpl_agent.cli.main import cli

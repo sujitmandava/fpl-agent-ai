@@ -1,4 +1,4 @@
-"""The planning engine, shared by the CLI and the web dashboard.
+"""The planning engine, shared by the CLI and the web API.
 
     setup = sync_setup(db, memory_path(memory_dir, manager_id), manager_id)
     plan = plan_from_setup(setup, PlanOptions(horizon=6))
@@ -56,7 +56,7 @@ POS = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 DEFAULT_MEMORY_DIR = "memory"
 # Players and fixtures are shared, so one user's refresh serves everyone for this long.
 BOOTSTRAP_MAX_AGE_SECONDS = 5 * 60
-# Several dashboard sessions can sync at once; only one refreshes the shared cache.
+# Several API requests can sync at once; only one refreshes the shared cache.
 _refresh_lock = threading.Lock()
 
 
@@ -353,7 +353,7 @@ def build_plan(db: str, memory_file: str | Path, manager_id: int, opts: PlanOpti
     return plan_from_setup(sync_setup(db, memory_file, manager_id), opts)
 
 
-# -- Views shared by CLI and dashboard ----------------------------------------
+# -- Views shared by CLI and API ----------------------------------------------
 
 def player_table(setup: Setup, forecast: pd.DataFrame) -> pd.DataFrame:
     """One row per player: identity, price, ownership, and every forecast column."""

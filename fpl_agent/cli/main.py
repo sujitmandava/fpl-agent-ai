@@ -3,12 +3,12 @@
 All options read from a .env file (or exported environment variables)
 so you can simply run:
 
-    python fpl_agent.py ui               # open the dashboard in your browser
     python fpl_agent.py recommend -m ID  # plan transfers, lineup, captain, chips
     python fpl_agent.py status -m ID     # what the agent remembers about a team
     python fpl_agent.py memory --help    # overrides, locked/banned players, notes
     python fpl_agent.py backtest         # check forecast accuracy on past gameweeks
     python fpl_agent.py hypotheses       # re-test open hypotheses (run after each gameweek)
+    python fpl_agent.py api              # JSON API for the web app
 
 ID is your FPL team ID (the number in your Points page link); set FPL_MANAGER_ID
 to skip typing it. Command-line flags override memory, which overrides values
@@ -19,12 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import sys
-import threading
-import time
-import urllib.request
-import webbrowser
 from pathlib import Path
 
 import click
@@ -568,7 +563,7 @@ def backtest(ctx: click.Context, horizon: int, windows: int) -> None:
 def hypotheses(ctx: click.Context, log_path: str | None) -> None:
     """Re-test open hypotheses on every completed gameweek and log the result.
 
-    Run after each gameweek (after `recommend` or `ui` has synced the data)
+    Run after each gameweek (after `recommend` or the web app has synced the data)
     to see whether the evidence is building or fading.
     """
     store = FPLStore(db_path=ctx.obj["db"])
@@ -579,7 +574,7 @@ def hypotheses(ctx: click.Context, log_path: str | None) -> None:
     finally:
         store.close()
     if history.empty:
-        raise click.ClickException("No history cached. Run `recommend` or `ui` first to sync.")
+        raise click.ClickException("No history cached. Run `recommend` first to sync.")
     last_done = gw - 1 if not fixtures[fixtures["event"] == gw]["finished"].fillna(0).all() else gw
     cutoffs = list(range(hyp.MIN_CUTOFF, last_done))
     if not cutoffs:
@@ -617,36 +612,7 @@ def hypotheses(ctx: click.Context, log_path: str | None) -> None:
     console.print(f"[dim]Logged to {log_path}[/]")
 
 
-# -- ui -----------------------------------------------------------------------
-
-@cli.command()
-@click.option("--port", type=int, default=8501, show_default=True)
-@click.pass_context
-def ui(ctx: click.Context, port: int) -> None:
-    """Open the dashboard (suggestions, team, players, fixtures, memory)."""
-    app = Path(__file__).resolve().parents[1] / "ui" / "app.py"
-    env = {**os.environ, "FPL_DB": ctx.obj["db"], "FPL_MEMORY_DIR": ctx.obj["memory_dir"]}
-    # Headless skips Streamlit's first-run email prompt, which blocks (or exits
-    # without a TTY); open the browser ourselves once the server answers.
-    cmd = [sys.executable, "-m", "streamlit", "run", str(app), "--server.port", str(port),
-           "--server.headless", "true", "--browser.gatherUsageStats", "false"]
-    url = f"http://localhost:{port}"
-
-    def open_when_ready() -> None:
-        for _ in range(60):
-            try:
-                urllib.request.urlopen(f"{url}/_stcore/health", timeout=1)
-                webbrowser.open(url)
-                return
-            except OSError:
-                time.sleep(0.5)
-
-    threading.Thread(target=open_when_ready, daemon=True).start()
-    try:
-        subprocess.run(cmd, env=env, check=False)
-    except KeyboardInterrupt:
-        pass
-
+# -- api ----------------------------------------------------------------------
 
 @cli.command()
 @click.option("--port", type=int, default=8000, show_default=True)

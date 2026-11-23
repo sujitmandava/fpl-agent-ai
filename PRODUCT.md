@@ -12,9 +12,8 @@ Next.js frontend backed by a Python API. Chosen 2026-11-22 so the interface
 isn't limited by Streamlit and can deploy to Vercel (free Hobby plan) as a
 demo later. The Python engine (`fpl_agent/`: data ingest, xPts forecast, MILP
 optimiser, planner, league layer) stays the source of truth and is exposed as
-the API. The current Streamlit dashboard (`fpl_agent/ui/app.py`) is the
-functional reference for the rebuild, not its design. The CLI stays for
-power users.
+the API. The old Streamlit dashboard was removed on 2026-11-23; the web app
+replaces it. The CLI stays for power users.
 
 ## Users
 

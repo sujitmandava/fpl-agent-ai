@@ -1,6 +1,6 @@
 # FPL Agent AI
 
-A Fantasy Premier League planner: it pulls FPL data, forecasts expected points from underlying stats, optimises transfers, lineup, captain and chips, and shows the results in a dashboard or the terminal. Anyone can use it: enter an FPL team ID and it plans from FPL's public data. No login, and it never touches your FPL account; you make the moves yourself.
+A Fantasy Premier League planner: it pulls FPL data, forecasts expected points from underlying stats, optimises transfers, lineup, captain and chips, and shows the results in a web app or the terminal. Anyone can use it: enter an FPL team ID and it plans from FPL's public data. No login, and it never touches your FPL account; you make the moves yourself.
 
 ## Architecture
 
@@ -10,11 +10,10 @@ fpl_agent/
 ├── forecast/         # xPts model (minutes, xG/xA, DC, team ratings) + backtest
 ├── optimizer/        # Mixed-Integer Linear Program (MILP) via PuLP
 ├── planner/          # Recommendation assembly: transfers, lineup, captain, rationale
-├── engine.py         # sync → forecast → optimise; shared by CLI and dashboard
+├── engine.py         # sync → forecast → optimise; shared by CLI and API
 ├── league.py         # mini-league standings, rivals' squads/chips, effective ownership, head-to-head
 ├── memory.py         # persistent memory of your team, transfers, chips, preferences
 ├── api.py            # JSON API for the web app (FastAPI)
-├── ui/app.py         # Streamlit dashboard
 └── cli/              # Click-based command-line interface with Rich output
 ```
 
@@ -49,38 +48,12 @@ cd web && pnpm install && pnpm dev   # web app on http://localhost:3000
 The web app proxies `/api/*` to `FPL_API_URL` (default `http://127.0.0.1:8000`).
 Settings such as locked and banned players stay in the visitor's browser and
 are sent with each request. Plan is built in full; League, Squad, Players and
-More are still being rebuilt, and work today in the dashboard below.
+More aren't built yet; the terminal covers most of them meanwhile.
 
 | Endpoint | Returns |
 |---|---|
 | `GET /api/team/{id}/plan` | The full plan as JSON. Query: `horizon`, `chip` (`none`/`wildcard`/`freehit`), `free_transfers`, `bank`, `ft_value`, `bench_weight`, `consistency`, `league`, `rival`, `locked`, `banned` (comma-separated ids), `fresh` |
 | `GET /api/model-check` | Backtest summary against the points-per-game baseline |
-
-### 2b. Or open the dashboard
-
-```bash
-python fpl_agent.py ui            # opens http://localhost:8501
-```
-
-The landing screen asks for a team ID (or a pasted Points page link). The ID is
-kept in the URL (`?team=1234567`), so a plan can be bookmarked or shared;
-**Switch team** in the sidebar goes back to the landing screen. Player and
-fixture data is cached once and shared by everyone using the same server.
-
-| Tab | What it shows |
-|---|---|
-| **Suggestions** | Projected points, gain vs. no transfers, recommended transfers with close-call alternatives, XI + bench with the stats behind each pick, captain/vice, chip plan, per-GW plan |
-| **League** | Mini-league standings, rivals' captains and chips, you vs a rival (gap, expected edge, rough chance to finish above, differentials), league effective ownership |
-| **My team** | Squad with purchase/selling prices and xPts, chip status by window, mini-league ranks, saved plans |
-| **Players** | Every player's forecast: filter by position, team, price, minutes; xG/90, xA/90, share of team xG, finishing form, DC%, CS%, xPts per GW, xPts/£m, league EO |
-| **Fixtures** | Team × GW grid coloured by expected goals or clean-sheet chance from the model's team ratings; ratings and recent form |
-| **Memory** | Free-transfer/bank overrides, locked and banned players, notes (same file the CLI uses) |
-| **Model check** | Walk-forward backtest vs. a points-per-game baseline |
-
-The sidebar sets horizon, Wildcard/Free Hit (only if available), one-off free
-transfers or bank, and how cautious transfers should be. Changing options
-re-solves from cached data without calling the API again; **Refresh from FPL**
-re-syncs.
 
 ### 3. Or use the terminal
 
@@ -150,7 +123,7 @@ python fpl_agent.py league                 # standings, rivals' captains and chi
 python fpl_agent.py league --rival "isak"  # compare with someone else
 ```
 
-The dashboard's **League** tab shows the same, plus who owns what in your league
+The web app's **League** screen shows the same, plus who owns what in your league
 (effective ownership counts captains double) and the differentials on each side.
 League effective ownership also appears next to close-call transfer options.
 
@@ -221,7 +194,7 @@ Tests cover:
 
 | Variable | Description |
 |----------|-------------|
-| `FPL_MANAGER_ID` | Optional team ID so the CLI doesn't need `--manager-id`; the dashboard pre-fills it |
+| `FPL_MANAGER_ID` | Optional team ID so the CLI doesn't need `--manager-id` |
 | `FPL_DB` | SQLite cache path (rebuilt automatically on a new season or schema change) |
 | `FPL_MEMORY_DIR` | Folder for per-team memory files (default `memory/`) |
 | `FPL_LEAGUE_ID` | Mini-league to track (default: your first private classic league) |
