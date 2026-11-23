@@ -64,6 +64,31 @@ class EngineError(Exception):
     """A problem the user can act on (no data, chip unavailable, solver failure)."""
 
 
+class DataNotReady(EngineError):
+    """Shared FPL data hasn't been fetched yet (a fresh server is still warming up)."""
+
+
+# Above this age, plans built from the cached data carry a note saying how old it is.
+STALE_DATA_NOTE_SECONDS = 3600
+
+
+def refresh_shared_data(db: str, client: FPLClient | None = None) -> None:
+    """Bring players, fixtures and per-match history up to date if they're stale.
+
+    Safe to call from several threads: only one refreshes at a time. Raises if
+    FPL can't be reached.
+    """
+    store = FPLStore(client=client or FPLClient(), db_path=db)
+    try:
+        with _refresh_lock:
+            if store.bootstrap_age() > BOOTSTRAP_MAX_AGE_SECONDS:
+                store.refresh_all()
+            if store.history_is_stale():
+                store.refresh_all_player_histories()
+    finally:
+        store.close()
+
+
 def manager_id_from_env() -> int | None:
     """FPL_MANAGER_ID if set (handy for the CLI), else None."""
     value = os.environ.get("FPL_MANAGER_ID", "").strip()
@@ -126,9 +151,13 @@ def _is_not_found(exc: Exception) -> bool:
 
 
 def sync_setup(db: str, memory_file: str | Path, manager_id: int,
-               force_refresh: bool = False) -> Setup:
+               force_refresh: bool = False, refresh_shared: bool = True) -> Setup:
     """Refresh shared data if it's stale, load the manager's team from public
     endpoints, and update their memory.
+
+    With ``refresh_shared=False`` (the hosted API, where a background thread
+    keeps shared data fresh) it never fetches players, fixtures or history
+    while a user waits; it raises DataNotReady if there's no data yet.
 
     Falls back to the cached database and the memory snapshot when the FPL API
     is unreachable. Raises EngineError if the team doesn't exist.
@@ -139,16 +168,24 @@ def sync_setup(db: str, memory_file: str | Path, manager_id: int,
 
     store = FPLStore(client=client, db_path=db)
     try:
-        with _refresh_lock:
-            try:
-                if force_refresh or store.bootstrap_age() > BOOTSTRAP_MAX_AGE_SECONDS:
-                    store.refresh_all()
-                if store.history_is_stale():
-                    store.refresh_all_player_histories()
-            except Exception as exc:
-                if store.players_df().empty:
-                    raise EngineError(f"FPL API unreachable and no cached data: {exc}") from exc
-                notes.append(f"FPL API unreachable ({exc.__class__.__name__}); using cached data.")
+        if refresh_shared:
+            with _refresh_lock:
+                try:
+                    if force_refresh or store.bootstrap_age() > BOOTSTRAP_MAX_AGE_SECONDS:
+                        store.refresh_all()
+                    if store.history_is_stale():
+                        store.refresh_all_player_histories()
+                except Exception as exc:
+                    if store.players_df().empty:
+                        raise EngineError(f"FPL API unreachable and no cached data: {exc}") from exc
+                    notes.append(f"FPL API unreachable ({exc.__class__.__name__}); using cached data.")
+        else:
+            if store.players_df().empty or get_meta(store.conn, "history_fetched_at") is None:
+                raise DataNotReady("The planner is loading this season's FPL data. "
+                                   "Try again in a minute or two.")
+            age = store.bootstrap_age()
+            if age > STALE_DATA_NOTE_SECONDS:
+                notes.append(f"Player data is {age / 3600:.0f}h old; FPL couldn't be reached since.")
 
         synced = True
         try:

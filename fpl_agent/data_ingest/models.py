@@ -170,7 +170,11 @@ def init_db(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
 
     A database built with an older schema is dropped and rebuilt.
     """
-    conn = sqlite3.connect(str(db_path))
+    # The API's background refresher writes while requests read: WAL lets readers
+    # carry on during a write, and the timeout waits out the brief write locks.
+    conn = sqlite3.connect(str(db_path), timeout=30)
+    if str(db_path) != ":memory:":
+        conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(META_SQL)
     if get_meta(conn, "schema_version") != SCHEMA_VERSION:
         for table in DATA_TABLES:

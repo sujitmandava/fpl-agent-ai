@@ -55,6 +55,21 @@ More aren't built yet; the terminal covers most of them meanwhile.
 | `GET /api/team/{id}/plan` | The full plan as JSON. Query: `horizon`, `chip` (`none`/`wildcard`/`freehit`), `free_transfers`, `bank`, `ft_value`, `bench_weight`, `consistency`, `league`, `rival`, `locked`, `banned` (comma-separated ids), `fresh` |
 | `GET /api/model-check` | Backtest summary against the points-per-game baseline |
 
+### Deploying the API
+
+The `Dockerfile` builds the API alone (the web app deploys separately, e.g. to
+Vercel with `FPL_API_URL` pointing at the API). It listens on `$PORT`
+(default 8000) and keeps shared FPL data in `/data`.
+
+```bash
+docker build -t fpl-api . && docker run -p 8000:8000 fpl-api
+```
+
+A background thread keeps players, fixtures and match history fresh, so no
+request waits on FPL. A fresh server answers `503` with `Retry-After` for the
+first refresh (about 15 seconds), then serves plans. Without a volume on
+`/data`, every restart repeats that warm-up.
+
 ### 3. Or use the terminal
 
 ```bash

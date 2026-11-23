@@ -1,15 +1,15 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-// The Python engine serves /api/*. Locally it runs on :8000 (`python fpl_agent.py api`);
-// proxying keeps the browser on one origin, the same shape a Vercel deploy will have.
-const API_URL = process.env.FPL_API_URL ?? "http://127.0.0.1:8000";
-
+// /api/* is forwarded to the Python engine by app/api/[...path]/route.ts, which
+// reads FPL_API_URL at request time (default http://127.0.0.1:8000 for
+// `python fpl_agent.py api`).
 const nextConfig: NextConfig = {
   devIndicators: false,
   allowedDevOrigins: ["127.0.0.1"],
-  async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }];
-  },
 };
 
 export default nextConfig;
+
+// Lets `next dev` see the Cloudflare bindings in wrangler.jsonc.
+initOpenNextCloudflareForDev();

@@ -7,7 +7,7 @@ export default function Pending({ title, what }: { title: string; what: string }
       <h1>{title}</h1>
       <p>{what}</p>
       <p className={styles.note}>
-        This section isn't built yet. Meanwhile, the terminal covers most of it:{" "}
+        This section isn’t built yet. Meanwhile, the terminal covers most of it:{" "}
         <code>python fpl_agent.py status</code>.
       </p>
     </section>

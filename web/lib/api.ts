@@ -58,11 +58,15 @@ export function fetchPlan(teamId: number, s: TeamSettings, signal?: AbortSignal,
   return getJson<Plan>(`/api/team/${teamId}/plan?${planQuery(s, fresh)}`, { signal });
 }
 
+/** Where the Python planning API lives (server side only). */
+export function apiBase(): string {
+  return (process.env.FPL_API_URL ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
+}
+
 /** Server-side fetch of the backtest summary; null when the API is unavailable. */
 export async function fetchModelCheck(): Promise<ModelCheck | null> {
-  const base = process.env.FPL_API_URL ?? "http://127.0.0.1:8000";
   try {
-    return await getJson<ModelCheck>(`${base}/api/model-check`, { next: { revalidate: 21600 } });
+    return await getJson<ModelCheck>(`${apiBase()}/api/model-check`, { next: { revalidate: 21600 } });
   } catch {
     return null;
   }

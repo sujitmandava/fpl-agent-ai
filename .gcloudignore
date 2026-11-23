@@ -1,0 +1,17 @@
+# Files left out of `gcloud run deploy --source .` (mirrors .dockerignore).
+.git
+.venv
+.pytest_cache
+.impeccable
+**/__pycache__
+*.egg-info
+*.db
+*.db-*
+.env
+.fpl_auth.json
+memory/
+hypothesis_log.json
+web/
+docs/
+tests/
+*.swp

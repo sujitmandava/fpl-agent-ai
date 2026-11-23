@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fpl-agent-ai",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [
+    // Self-reference used for ISR revalidation; must match "name" above.
+    { "binding": "WORKER_SELF_REFERENCE", "service": "fpl-agent-ai" }
+  ],
+  "kv_namespaces": [
+    // Namespace "fpl-agent-web-cache" (wrangler kv namespace create).
+    { "binding": "NEXT_INC_CACHE_KV", "id": "1e351284c4c94b988c5332b446d1ecf7" }
+  ],
+  "vars": {
+    // The Cloud Run API (printed by deploy/cloudrun.sh).
+    "FPL_API_URL": "https://fpl-api-u76ygtwj4a-uc.a.run.app"
+  },
+  "observability": { "enabled": true }
+}

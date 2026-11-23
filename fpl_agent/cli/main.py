@@ -615,15 +615,17 @@ def hypotheses(ctx: click.Context, log_path: str | None) -> None:
 # -- api ----------------------------------------------------------------------
 
 @cli.command()
+@click.option("--host", default="127.0.0.1", show_default=True,
+              help="Use 0.0.0.0 to accept connections from other machines.")
 @click.option("--port", type=int, default=8000, show_default=True)
 @click.option("--reload", is_flag=True, help="Restart on code changes (development).")
 @click.pass_context
-def api(ctx: click.Context, port: int, reload: bool) -> None:
+def api(ctx: click.Context, host: str, port: int, reload: bool) -> None:
     """Serve the JSON API the web app uses (http://localhost:PORT/api/...)."""
     import uvicorn
 
     os.environ["FPL_DB"] = ctx.obj["db"]
-    uvicorn.run("fpl_agent.api:app", host="127.0.0.1", port=port, reload=reload)
+    uvicorn.run("fpl_agent.api:app", host=host, port=port, reload=reload)
 
 
 # -- Standalone runner --------------------------------------------------------

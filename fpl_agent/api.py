@@ -2,6 +2,15 @@
 
 Run locally with ``python fpl_agent.py api`` (http://localhost:8000).
 
+Shared FPL data (players, fixtures, every player's match history) is kept
+fresh by a background thread, so no request ever waits on that refresh. A
+freshly started server answers 503 until the first refresh finishes.
+
+On hosts that pause CPU between requests (Cloud Run), set
+FPL_BACKGROUND_REFRESH=0: a request that finds no data loads it itself (a cold
+start), and a scheduler keeps it fresh by calling ``POST /api/refresh`` with
+the ``X-Refresh-Token`` header set to FPL_REFRESH_TOKEN.
+
 Stateless per request: a team's saved settings (locked/banned players, free
 transfer and bank overrides) arrive as query parameters, so the web app can
 keep them in the visitor's browser. Each team's synced data is cached in
@@ -11,20 +20,26 @@ again.
 
 from __future__ import annotations
 
+import hmac
+import logging
 import math
 import os
 import tempfile
 import threading
 import time
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from typing import Literal
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from fpl_agent import engine
-from fpl_agent.engine import POS, EngineError, Plan, PlanOptions, Setup
+from fpl_agent.engine import POS, DataNotReady, EngineError, Plan, PlanOptions, Setup
+
+logger = logging.getLogger(__name__)
 
 DB = os.environ.get("FPL_DB", "fpl_agent.db")
 # The API never needs memory between requests; snapshots go to a scratch folder.
@@ -32,8 +47,49 @@ MEMORY_DIR = os.environ.get("FPL_API_MEMORY_DIR") or tempfile.mkdtemp(prefix="fp
 SETUP_TTL_SECONDS = 5 * 60
 SETUP_CACHE_SIZE = 256
 MODEL_CHECK_TTL_SECONDS = 6 * 3600
+REFRESH_INTERVAL_SECONDS = 5 * 60
+REFRESH_RETRY_SECONDS = 60
 
-app = FastAPI(title="FPL Agent API", version="0.1.0")
+
+# -- Background refresh -------------------------------------------------------
+
+def _refresh_loop(stop: threading.Event) -> None:
+    """Keep shared data fresh: players/fixtures every few minutes, history every 6h."""
+    while not stop.is_set():
+        try:
+            engine.refresh_shared_data(DB)
+            wait = REFRESH_INTERVAL_SECONDS
+        except Exception:
+            logger.warning("Background FPL refresh failed; retrying soon.", exc_info=True)
+            wait = REFRESH_RETRY_SECONDS
+        stop.wait(wait)
+
+
+def _background_refresh() -> bool:
+    return os.environ.get("FPL_BACKGROUND_REFRESH", "1") != "0"
+
+
+def _load_data_now() -> None:
+    """Without the background thread, the first request after a cold start
+    loads shared data itself. Concurrent callers wait on the same refresh."""
+    try:
+        engine.refresh_shared_data(DB)
+    except Exception as exc:
+        logger.warning("FPL refresh on request failed.", exc_info=True)
+        raise DataNotReady("Couldn't reach FPL to load this season's data. "
+                           "Try again in a minute.") from exc
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    stop = threading.Event()
+    if _background_refresh():
+        threading.Thread(target=_refresh_loop, args=(stop,), name="fpl-refresh", daemon=True).start()
+    yield
+    stop.set()
+
+
+app = FastAPI(title="FPL Agent API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in os.environ.get("FPL_API_CORS", "http://localhost:3000").split(",") if o],
@@ -60,7 +116,14 @@ def _setup(team_id: int, league_id: int | None, fresh: bool = False) -> Setup:
         if hit and not fresh and time.time() - hit[0] < SETUP_TTL_SECONDS:
             _setups.move_to_end(key)
             return hit[1]
-    setup = engine.sync_setup(DB, engine.memory_path(MEMORY_DIR, team_id), team_id)
+    mem = engine.memory_path(MEMORY_DIR, team_id)
+    try:
+        setup = engine.sync_setup(DB, mem, team_id, refresh_shared=False)
+    except DataNotReady:
+        if _background_refresh():
+            raise
+        _load_data_now()
+        setup = engine.sync_setup(DB, mem, team_id, refresh_shared=False)
     if league_id and (setup.league is None or setup.league.league_id != league_id):
         engine.load_league(setup, league_id)
     with _setups_lock:
@@ -280,6 +343,22 @@ def health() -> dict:
     return {"ok": True}
 
 
+@app.post("/api/refresh")
+def refresh(x_refresh_token: str | None = Header(None)) -> dict:
+    """Refresh shared FPL data now (for a scheduler). Off unless FPL_REFRESH_TOKEN is set."""
+    expected = os.environ.get("FPL_REFRESH_TOKEN", "")
+    if not expected:
+        raise HTTPException(404, "Not found")
+    if not x_refresh_token or not hmac.compare_digest(x_refresh_token, expected):
+        raise HTTPException(401, "Bad refresh token")
+    try:
+        engine.refresh_shared_data(DB)
+    except Exception as exc:
+        logger.warning("Scheduled FPL refresh failed.", exc_info=True)
+        raise HTTPException(502, f"FPL refresh failed: {exc.__class__.__name__}") from exc
+    return {"ok": True}
+
+
 @app.get("/api/team/{team_id}/plan")
 def team_plan(
     team_id: int,
@@ -313,6 +392,8 @@ def team_plan(
             bench_weight=bench_weight, ft_value=ft_value, consistency=consistency,
             locked=_ids(locked), banned=_ids(banned),
         ), record=False)
+    except DataNotReady as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=503, headers={"Retry-After": "60"})
     except EngineError as exc:
         status = 404 if "No FPL team found" in str(exc) else 422
         raise HTTPException(status, str(exc)) from exc
@@ -334,12 +415,26 @@ def model_check(horizon: int = Query(3, ge=1, le=6)) -> dict:
     from fpl_agent.data_ingest import FPLStore
     from fpl_agent.forecast.backtest import backtest_predictions, summarise, top_picks_avg
 
-    store = FPLStore(db_path=DB)
-    try:
-        players, history, fixtures = store.players_df(), store.player_history_df(), store.fixtures_df()
-        teams, scoring = store.teams_df(), store.scoring_rules()
-    finally:
-        store.close()
+    def load():
+        store = FPLStore(db_path=DB)
+        try:
+            return (store.players_df(), store.player_history_df(), store.fixtures_df(),
+                    store.teams_df(), store.scoring_rules())
+        finally:
+            store.close()
+
+    players, history, fixtures, teams, scoring = load()
+    if (players.empty or history.empty) and not _background_refresh():
+        try:
+            _load_data_now()
+        except DataNotReady:
+            pass
+        else:
+            players, history, fixtures, teams, scoring = load()
+    if players.empty or history.empty:
+        return JSONResponse({"detail": "The planner is loading this season's FPL data. "
+                                       "Try again in a minute or two."},
+                            status_code=503, headers={"Retry-After": "60"})
     done = fixtures[fixtures["finished"].fillna(0).astype(bool)]
     last_done = int(done["event"].max()) if not done.empty else 0
     cutoffs = [c for c in range(last_done - horizon - 3, last_done - horizon + 1) if c >= 3]

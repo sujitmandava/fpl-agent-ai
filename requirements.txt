@@ -1,9 +1,11 @@
-python-dotenv>=1.0.0
-requests>=2.31.0
-pandas>=2.1.0
-numpy>=1.25.0
-PuLP>=2.7.0
-click>=8.1.0
-rich>=13.7.0
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
+# Exact versions for the deployed API (Dockerfile). Tested together; bump deliberately.
+# PuLP 4 dropped the bundled CBC solver the optimiser uses, so stay on 3.x.
+python-dotenv==1.2.1
+requests==2.32.5
+pandas==3.0.1
+numpy==2.4.2
+PuLP==3.3.0
+click==8.3.1
+rich==14.3.3
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
