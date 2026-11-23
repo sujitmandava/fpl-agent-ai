@@ -112,6 +112,8 @@ export interface Plan {
   vice_captain: number;
   lineup: { xi: number[]; bench: number[]; formation: string };
   chip_advice: string[];
+  /** Chips scheduled to distinct weeks before they expire; gw null = hold past the forecast. */
+  chip_plan: { name: string; label: string; gw: number | null; gain: number | null; expires: number; on_wildcard_squad: boolean }[];
   plan_by_gw: { gw: number; captain: number | null; xi_points: number | null; bench_points: number | null }[];
   players: Record<string, PlayerCard>;
   league: League | null;

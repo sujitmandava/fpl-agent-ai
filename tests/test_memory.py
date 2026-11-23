@@ -12,7 +12,7 @@ from click.testing import CliRunner
 from fpl_agent.data_ingest.manager import ManagerState, chip_status
 from fpl_agent.memory import AgentMemory
 from fpl_agent.optimizer.milp import OptimizationResult, TeamState, optimize
-from fpl_agent.planner.chips import chip_outlook, fixture_calendar
+from fpl_agent.planner.chips import chip_outlook, chip_values, fixture_calendar, schedule_chips
 
 CHIP_DEFS = [
     {"name": n, "number": 1, "start_event": s, "stop_event": e}
@@ -52,7 +52,7 @@ def test_chip_status_per_window():
     assert later[("wildcard", 20)] == "available"
 
 
-def test_chip_outlook_picks_best_gameweeks_and_warns_expiry():
+def test_chip_plan_keeps_chips_inside_their_window():
     plan = OptimizationResult(
         selected_ids=[], transfers_in=[], transfers_out=[], total_expected_points=0,
         transfer_cost=0, solver_status="Optimal", gameweeks=[17, 18, 19, 20],
@@ -63,13 +63,17 @@ def test_chip_outlook_picks_best_gameweeks_and_warns_expiry():
     chips = chip_status(CHIP_DEFS, [], 17)
     fixtures = pd.DataFrame([{"event": 18, "team_h": 1, "team_a": 2},
                              {"event": 18, "team_h": 1, "team_a": 3}])
-    lines = chip_outlook(plan, chips, fixture_calendar(fixtures, TEAMS, [17, 18, 19, 20]),
-                         names={1: "Salah", 2: "Haaland"})
-    text = "\n".join(lines)
-    assert "Bench Boost (expires after GW19): best in GW18" in text   # GW20 is outside window
-    assert "Triple Captain (expires after GW19): best in GW19 on Haaland" in text
+    calendar = fixture_calendar(fixtures, TEAMS, [17, 18, 19, 20])
+    values = chip_values(plan, pd.DataFrame({"player_id": [1, 2], **{f"expected_points_gw{g}": [0, 0]
+                                                               for g in (17, 18, 19, 20)}}))
+    picks = {p.name: p for p in schedule_chips(values, chips)}
+    assert picks["bboost"].gw == 18      # GW20 is outside the window
+    assert picks["3xc"].gw == 19
+    text = "\n".join(chip_outlook(list(picks.values()), values, chips, calendar,
+                                  names={1: "Salah", 2: "Haaland"}))
+    assert "GW19 Triple Captain: +12.0 EP on Haaland" in text
     assert "double for AAA" in text and "blank for" in text
-    assert "must be used by GW19" in text
+    assert "expire after GW19" in text
 
 
 # -- Memory -------------------------------------------------------------------

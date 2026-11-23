@@ -259,6 +259,9 @@ def plan_payload(plan: Plan, rival_entry: int | None = None) -> dict:
         "vice_captain": rec.vice_captain_id,
         "lineup": {"xi": rec.starting_xi, "bench": rec.bench_order, "formation": _formation(plan)},
         "chip_advice": plan.chip_advice,
+        "chip_plan": [{"name": c.name, "label": c.label, "gw": c.gw, "gain": _num(c.gain),
+                       "expires": c.expires, "on_wildcard_squad": c.on_wildcard_squad}
+                      for c in plan.chip_plan],
         "plan_by_gw": [{"gw": g, "captain": res.captains.get(g), "xi_points": _num(xi_points[g]),
                         "bench_points": _num(res.bench_points.get(g, 0))} for g in res.gameweeks],
         "players": _player_cards(plan, ids, gws, next_gw, eo, rival_squad),

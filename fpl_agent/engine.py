@@ -36,7 +36,20 @@ from fpl_agent.memory import AgentMemory
 from fpl_agent.optimizer import optimize
 from fpl_agent.optimizer.milp import OptimizationError, OptimizationResult, TeamState
 from fpl_agent.planner import build_recommendation
-from fpl_agent.planner.chips import chip_outlook, fixture_calendar
+from fpl_agent.planner.chips import (
+    FREE_HIT_SETTINGS,
+    LOOKAHEAD_CAP,
+    WILDCARD_WEEKS,
+    block,
+    ChipPick,
+    ChipValues,
+    chip_outlook,
+    chip_values,
+    fixture_calendar,
+    schedule_chips,
+    single_week,
+    wildcard_gain,
+)
 from fpl_agent.planner.recommend import Recommendation
 
 POS = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
@@ -228,6 +241,7 @@ class Plan:
     ratings: TeamRatings
     result: OptimizationResult
     baseline: OptimizationResult
+    chip_plan: list[ChipPick] = field(default_factory=list)
 
 
 def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Plan:
@@ -276,31 +290,63 @@ def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Pla
         result = optimize(team_state, forecast, setup.players,
                           horizon=1 if opts.free_hit else None,
                           unlimited_transfers=chip_mode, **common)
-        wc_res = fh_res = None
-        if not chip_mode:
-            if setup.chip_available("wildcard"):
-                wc_res = optimize(team_state, forecast, setup.players,
-                                  unlimited_transfers=True, **common)
-            if setup.chip_available("freehit"):
-                fh_res = optimize(team_state, forecast, setup.players, horizon=1,
-                                  unlimited_transfers=True, **common)
+        values, picks = _chip_plan(setup, opts, team_state, common)
     except OptimizationError as exc:
         raise EngineError(f"Optimiser failed: {exc}") from exc
 
     rec = build_recommendation(result, setup.players, forecast, state.squad, state.selling_prices,
                                baseline=baseline, fixtures=setup.fixtures, teams=setup.teams,
                                bank=team_state.bank)
-    gws = (result.gameweeks if not opts.free_hit
-           else list(range(setup.planning_gw, setup.planning_gw + opts.horizon)))
-    advice = chip_outlook(result if not opts.free_hit else baseline, setup.chips,
-                          fixture_calendar(setup.fixtures, setup.teams, gws),
-                          wildcard=wc_res, free_hit=fh_res, names=names)
+    gws = values.weeks if values else list(range(setup.planning_gw, setup.planning_gw + opts.horizon))
+    advice = chip_outlook(picks, values, setup.chips,
+                          fixture_calendar(setup.fixtures, setup.teams, gws), names=names)
 
     if record:
         memory.record_recommendation(setup.planning_gw, rec, names, advice)
         memory.save()
     return Plan(rec, setup, team_state, forecast, advice,
-                {"free_transfers": ft_src, "bank": bank_src}, model.ratings, result, baseline)
+                {"free_transfers": ft_src, "bank": bank_src}, model.ratings, result, baseline, picks)
+
+
+def _chip_plan(setup: Setup, opts: PlanOptions, team_state: TeamState,
+               common: dict) -> tuple[ChipValues | None, list[ChipPick]]:
+    """Value the open chips week by week up to their expiry and schedule them.
+
+    Looks past the user's horizon: a chip that expires after GW19 has to be
+    planned against every week left before then.
+    """
+    open_chips = [c for c in setup.chips if c.get("status") == "available"]
+    if not open_chips:
+        return None, []
+    first = setup.planning_gw
+    last = max(c["window"][1] for c in open_chips)
+    chip_end = min(last, first + LOOKAHEAD_CAP - 1, 38)
+    weeks = list(range(first, chip_end + 1))
+    has_wc = setup.chip_available("wildcard")
+    # A Wildcard's haul can run past the chip window, so forecast that far.
+    forecast_end = min(38, chip_end + (WILDCARD_WEEKS - 1 if has_wc else 0))
+    forecast = ExpectedPointsModel(
+        players=setup.players, history=setup.history, fixtures=setup.fixtures,
+        teams=setup.teams, current_gw=setup.current_gw, horizon=forecast_end - first + 1,
+        scoring=setup.scoring,
+    ).predict()
+    players = setup.players
+    base = optimize(team_state, block(forecast, first, len(weeks)), players, **common)
+    wildcards = None
+    if has_wc:
+        wildcards = {}
+        for g in weeks:
+            haul = block(forecast, g, WILDCARD_WEEKS)
+            wc = optimize(team_state, haul, players, unlimited_transfers=True, **common)
+            normal = optimize(team_state, haul, players, **common)
+            wildcards[g] = (wc, wildcard_gain(wc, normal, forecast,
+                                              team_state.free_transfers, common["ft_value"]))
+    free_hits = ({g: optimize(team_state, single_week(forecast, g), players,
+                              unlimited_transfers=True, **FREE_HIT_SETTINGS) for g in weeks}
+                 if setup.chip_available("freehit") else None)
+    values = chip_values(base, forecast, wildcards, free_hits)
+    fixed = {"wildcard": first} if opts.wildcard else {"freehit": first} if opts.free_hit else {}
+    return values, schedule_chips(values, setup.chips, fixed)
 
 
 def build_plan(db: str, memory_file: str | Path, manager_id: int, opts: PlanOptions) -> Plan:

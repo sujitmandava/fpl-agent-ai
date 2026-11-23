@@ -69,7 +69,7 @@ fixture data is cached once and shared by everyone using the same server.
 
 | Tab | What it shows |
 |---|---|
-| **Suggestions** | Projected points, gain vs. no transfers, recommended transfers with close-call alternatives, XI + bench with the stats behind each pick, captain/vice, chip outlook, per-GW plan |
+| **Suggestions** | Projected points, gain vs. no transfers, recommended transfers with close-call alternatives, XI + bench with the stats behind each pick, captain/vice, chip plan, per-GW plan |
 | **League** | Mini-league standings, rivals' captains and chips, you vs a rival (gap, expected edge, rough chance to finish above, differentials), league effective ownership |
 | **My team** | Squad with purchase/selling prices and xPts, chip status by window, mini-league ranks, saved plans |
 | **Players** | Every player's forecast: filter by position, team, price, minutes; xG/90, xA/90, share of team xG, finishing form, DC%, CS%, xPts per GW, xPts/£m, league EO |
@@ -95,8 +95,14 @@ cache is older than 6 hours, syncs your setup into memory, and prints:
 - the next-GW XI and bench with the stats behind each pick (opponent, expected
   minutes, xG/90, xA/90, defensive-contribution %, clean-sheet %)
 - captain, vice, projected points, and the gain compared with making no transfers
-- a **chip outlook**: double/blank gameweeks, and the best gameweek for each
-  available chip within its window, with expiry warnings
+- a **chip plan**: every chip left in the current window (GW1–19, then
+  GW20–38) gets its own week before it expires, since unused chips are lost
+  and only one can be played per gameweek. It looks ahead to the window's end
+  (up to 8 GWs), not just your horizon. A Free Hit is pure one-week points
+  (no locks, bans or preferences). A Wildcard squad is built for a 5-week haul
+  and credited with the hits it avoids and the free transfers it keeps. A Bench
+  Boost, Triple Captain or Free Hit later in that haul is valued on the
+  rebuilt squad
 
 Useful options:
 

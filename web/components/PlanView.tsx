@@ -6,6 +6,7 @@ import { SlidersHorizontal, ChevronRight } from "lucide-react";
 import type { ApiError } from "@/lib/api";
 import { usePlan } from "@/lib/usePlan";
 import type { Move, Plan, PlayerCard } from "@/lib/types";
+import type { TeamSettings } from "@/lib/settings";
 import { deadline, firstName, fixed, ordinal, pct, signed, signedInt } from "@/lib/format";
 import Board, { Bench } from "./Board";
 import TeamForm from "./TeamForm";
@@ -119,14 +120,7 @@ export default function PlanView({ teamId }: { teamId: number }) {
 
           <CaptainRow plan={plan} rivalName={rivalName} onOpen={setOpenPlayer} />
 
-          <div className={styles.row}>
-            <div className={styles.rowMain}>
-              <span className={styles.what}>{settings.chip === "wildcard" ? "Wildcard on" : settings.chip === "freehit" ? "Free Hit on" : "Chips: hold"}</span>
-              <span className={styles.proof}>
-                {settings.chip === "none" ? "Best weeks for each chip are below." : "Planned with your chip active."}
-              </span>
-            </div>
-          </div>
+          <ChipRow plan={plan} chip={settings.chip} />
 
           <dl className={styles.totals}>
             <div><dt>GW{plan.gameweek.next} gain</dt><dd className="cond">{signed(plan.summary.delta_next)}</dd></div>
@@ -147,7 +141,7 @@ export default function PlanView({ teamId }: { teamId: number }) {
         <CloseCalls moves={plan.moves} players={players} />
 
         <section className={styles.section} aria-labelledby="chips">
-          <h2 id="chips">Chip outlook</h2>
+          <h2 id="chips">Chip plan</h2>
           <ul className={styles.list}>{plan.chip_advice.map((a) => <li key={a}>{a}</li>)}</ul>
         </section>
 
@@ -302,6 +296,37 @@ function MoveRow({ move, out, inn, rivalName, horizon, selected, onSelect }: {
         </span>
       </button>
     </li>
+  );
+}
+
+function ChipRow({ plan, chip }: { plan: Plan; chip: TeamSettings["chip"] }) {
+  const scheduled = (plan.chip_plan ?? []).filter((c) => c.gw !== null);
+  const now = scheduled.find((c) => c.gw === plan.gameweek.planning);
+  const next = scheduled.find((c) => c.gw !== plan.gameweek.planning);
+  let what: string;
+  let proof: string;
+  if (chip !== "none") {
+    what = chip === "wildcard" ? "Wildcard on" : "Free Hit on";
+    proof = "Planned with your chip active. The other chips are planned around it below.";
+  } else if (now) {
+    what = `Play ${now.label}`;
+    proof = now.name === "wildcard" || now.name === "freehit"
+      ? `Best week for it before GW${now.expires}. Turn it on in Options to plan the squad with it.`
+      : `Worth ${fixed(now.gain)} EP this week. The full chip plan is below.`;
+  } else if (next) {
+    what = "Chips: hold";
+    proof = `Next up: ${next.label} in GW${next.gw}. The full chip plan is below.`;
+  } else {
+    what = "Chips: none to play";
+    proof = "No chips left in this window.";
+  }
+  return (
+    <div className={styles.row}>
+      <div className={styles.rowMain}>
+        <span className={styles.what}>{what}</span>
+        <span className={styles.proof}>{proof}</span>
+      </div>
+    </div>
   );
 }
 
