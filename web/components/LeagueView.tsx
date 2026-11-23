@@ -6,7 +6,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { usePlan } from "@/lib/usePlan";
 import type { League, Plan, PlayerCard, Rival } from "@/lib/types";
 import { firstName, fixed, pct, signed, signedInt } from "@/lib/format";
-import { Failure, Skeleton, Stake } from "./PlanView";
+import { Failure, LeagueOptions, Skeleton, Stake } from "./PlanView";
 import { useTeamStatus } from "./Shell";
 import OptionsSheet from "./OptionsSheet";
 import RaceBoard, { raceSeries } from "./RaceBoard";
@@ -45,7 +45,23 @@ export default function LeagueView({ teamId }: { teamId: number }) {
       </div>
       <header className={ps.top}>
         <div className={ps.title}>
-          <h1>{league?.name ?? "Your mini-league"}</h1>
+          {plan.leagues.length > 1 ? (
+            <h1>
+              <label className={styles.leaguePick}>
+                <span className="sr-only">League to compare in</span>
+                <select
+                  value={league?.id ?? ""}
+                  disabled={loading}
+                  onChange={(e) => pickLeague(Number(e.target.value))}
+                >
+                  {!league && <option value="" disabled>Choose a league</option>}
+                  <LeagueOptions leagues={plan.leagues} />
+                </select>
+              </label>
+            </h1>
+          ) : (
+            <h1>{league?.name ?? "Your mini-league"}</h1>
+          )}
           <p>
             {league ? `Standings after GW${league.gw}` : (plan.team.name ?? `Team ${teamId}`)}
             <span className={ps.status} aria-live="polite">{loading ? " · updating…" : ""}</span>
@@ -58,10 +74,10 @@ export default function LeagueView({ teamId }: { teamId: number }) {
 
       {error && <p className={ps.inlineError} role="alert">{error.message}</p>}
 
-      <Stake plan={plan} onRival={pickRival} onLeague={pickLeague} detail={false} />
+      <Stake plan={plan} onRival={pickRival} onLeague={pickLeague} detail={false} leaguePicker={false} />
 
       {!league ? (
-        <NoLeague />
+        plan.leagues.length > 0 ? <LeagueNotLoaded /> : <NoLeague />
       ) : (
         <>
           <div className={ps.work}>
@@ -398,6 +414,18 @@ function Ownership({ plan, league }: { plan: Plan; league: League }) {
         player you don&apos;t own costs you ground every time he scores.
       </p>
     </section>
+  );
+}
+
+function LeagueNotLoaded() {
+  return (
+    <div className={styles.noLeague}>
+      <div className={ps.emptyBoard} aria-hidden><span>No league on the board</span></div>
+      <div className={styles.noLeagueText}>
+        <h2>Couldn&apos;t load that league</h2>
+        <p>FPL didn&apos;t return its standings just now. Pick another league above, or refresh from Options in a minute.</p>
+      </div>
+    </div>
   );
 }
 

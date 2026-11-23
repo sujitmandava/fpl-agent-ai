@@ -89,7 +89,11 @@ def test_memory_round_trip_and_snapshot(tmp_path):
 
     data = json.loads(path.read_text())
     assert data["manager"]["team_name"] == "My XI"
-    assert data["manager"]["leagues"] == [{"id": 7, "name": "Mates", "rank": 3}]
+    # Every classic league is kept, private ones first.
+    assert data["manager"]["leagues"] == [
+        {"id": 7, "name": "Mates", "rank": 3, "size": None, "private": True},
+        {"id": 1, "name": "Overall", "rank": 9, "size": None, "private": False},
+    ]
     assert data["squad"][0]["purchase_price"] == 48
     assert data["free_transfers"] == 2 and data["bank"] == 12
 

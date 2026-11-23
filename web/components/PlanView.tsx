@@ -210,10 +210,12 @@ export default function PlanView({ teamId }: { teamId: number }) {
   );
 }
 
-export function Stake({ plan, onRival, onLeague, detail = true }: {
+export function Stake({ plan, onRival, onLeague, detail = true, leaguePicker = true }: {
   plan: Plan; onRival: (e: number) => void; onLeague: (id: number) => void;
   /** Edge and finish chance beside the figure; off where a plate already sets them. */
   detail?: boolean;
+  /** The league select beside the figure; off where the page title is the picker. */
+  leaguePicker?: boolean;
 }) {
   const league = plan.league;
   const rival = league?.rival;
@@ -231,6 +233,7 @@ export function Stake({ plan, onRival, onLeague, detail = true }: {
   }
 
   const others = league.standings.filter((s) => !s.is_me);
+  const showLeagues = leaguePicker && plan.leagues.length > 1;
   const behind = rival.gap < 0;
   return (
     <section className={styles.stake} aria-label="Your mini-league position">
@@ -248,17 +251,17 @@ export function Stake({ plan, onRival, onLeague, detail = true }: {
               ))}
             </select>
           </label>
-          {" · "}{ordinal(league.my_rank)} of {league.size}
+          {" · "}{ordinal(league.my_rank)} of {league.size.toLocaleString("en-GB")}
         </p>
-        {(detail || plan.leagues.length > 1) && <p>
+        {(detail || showLeagues) && <p>
           {detail && <>Edge {signed(rival.edge_per_gw)}/GW · {pct(rival.p_ahead)} to finish above</>}
-          {plan.leagues.length > 1 && (
+          {showLeagues && (
             <>
               {detail && " · "}
               <label className={styles.rivalPick}>
                 <span className="sr-only">League</span>
                 <select value={league.id} onChange={(e) => onLeague(Number(e.target.value))}>
-                  {plan.leagues.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  <LeagueOptions leagues={plan.leagues} />
                 </select>
               </label>
             </>
@@ -266,6 +269,24 @@ export function Stake({ plan, onRival, onLeague, detail = true }: {
         </p>}
       </div>
     </section>
+  );
+}
+
+/** A league select's options: mini-leagues, then public leagues with your rank. */
+export function LeagueOptions({ leagues }: { leagues: Plan["leagues"] }) {
+  const option = (l: Plan["leagues"][number]) => (
+    <option key={l.id} value={l.id}>
+      {l.name}{l.rank ? ` · ${ordinal(l.rank)}` : ""}
+    </option>
+  );
+  const mini = leagues.filter((l) => l.private);
+  const open = leagues.filter((l) => !l.private);
+  if (!mini.length || !open.length) return <>{leagues.map(option)}</>;
+  return (
+    <>
+      <optgroup label="Mini-leagues">{mini.map(option)}</optgroup>
+      <optgroup label="Public leagues (vs the top 10)">{open.map(option)}</optgroup>
+    </>
   );
 }
 

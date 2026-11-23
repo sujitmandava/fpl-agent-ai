@@ -117,7 +117,8 @@ export interface Plan {
   plan_by_gw: { gw: number; captain: number | null; xi_points: number | null; bench_points: number | null }[];
   players: Record<string, PlayerCard>;
   league: League | null;
-  leagues: { id: number; name: string; rank: number | null }[];
+  /** Every classic league the team is in, private (mini-leagues) first. */
+  leagues: { id: number; name: string; rank: number | null; size: number | null; private: boolean }[];
   notes: string[];
   synced: boolean;
   rationale: string;

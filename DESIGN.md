@@ -285,7 +285,7 @@ From 760px the work area becomes two columns: the board (up to 540px) with the s
 
 **The Board-First Rule.** On every working screen the framed board is the largest object in the first viewport; tables and long copy live below it.
 
-The League screen keeps the Plan grid: stake line, race board left with the "Head to head" plate right from 760px (stacked on phones), then full-width sections below: standings (your row on a 6% blue wash with a "You" pill; the rival marked by their letter disc; tapping a manager makes them the rival), the two "Only you" / "Only rival" lists side by side, the gameweek table with "Projected" and "Played" row groups on a wall-coloured head, and who the league owns.
+The League screen's title is its league picker when the team is in more than one classic league: the league name at title size on the stake line's dashed underline with a chevron, mini-leagues grouped first and public leagues (compared against their top 10) after, each with your rank; the stake line drops its own league select there. The League screen keeps the Plan grid: stake line, race board left with the "Head to head" plate right from 760px (stacked on phones), then full-width sections below: standings (your row on a 6% blue wash with a "You" pill; the rival marked by their letter disc; tapping a manager makes them the rival), the two "Only you" / "Only rival" lists side by side, the gameweek table with "Projected" and "Played" row groups on a wall-coloured head, and who the league owns.
 
 ## Elevation & Depth
 

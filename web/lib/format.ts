@@ -12,7 +12,7 @@ export const money = (v: number | null | undefined) => (v == null ? "—" : `£$
 export const ordinal = (n: number) => {
   const s = ["th", "st", "nd", "rd"];
   const v = n % 100;
-  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+  return `${n.toLocaleString("en-GB")}${s[(v - 20) % 10] || s[v] || s[0]}`;
 };
 
 /** "Fri 27 Nov, 18:30" in the visitor's own time zone. */
