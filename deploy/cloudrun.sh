@@ -49,11 +49,13 @@ URL="$(gc run services describe "$SERVICE" --region "$REGION" --format='value(st
 echo "→ Scheduling a data refresh every 10 minutes"
 SCHED=(--location "$REGION" --schedule "*/10 * * * *" --time-zone "Etc/UTC"
        --uri "$URL/api/refresh" --http-method POST
-       --headers "X-Refresh-Token=$TOKEN" --attempt-deadline 300s)
+       --attempt-deadline 300s)
+HEADER="X-Refresh-Token=$TOKEN"
+# `create` takes --headers; `update` only accepts --update-headers.
 if gc scheduler jobs describe "$JOB" --location "$REGION" >/dev/null 2>&1; then
-  gc scheduler jobs update http "$JOB" "${SCHED[@]}" --format none
+  gc scheduler jobs update http "$JOB" "${SCHED[@]}" --update-headers "$HEADER" --format none
 else
-  gc scheduler jobs create http "$JOB" "${SCHED[@]}" --format none
+  gc scheduler jobs create http "$JOB" "${SCHED[@]}" --headers "$HEADER" --format none
 fi
 gc scheduler jobs run "$JOB" --location "$REGION" >/dev/null   # warm it now
 
