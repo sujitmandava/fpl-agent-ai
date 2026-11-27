@@ -11,6 +11,7 @@ export interface TeamSettings {
   ftValue: number;
   benchWeight: number;
   consistency: number;
+  chase: number;
   locked: number[];
   banned: number[];
   league: number | null;
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS: TeamSettings = {
   ftValue: 1,
   benchWeight: 0.1,
   consistency: 0.5,
+  chase: 0,
   locked: [],
   banned: [],
   league: null,

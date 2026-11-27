@@ -176,9 +176,18 @@ function HeadToHead({ plan, league, rival }: { plan: Plan; league: League; rival
       <p className={ps.totalsNote}>
         Both squads held. Finish chance is rough: the gap plus that edge against a ±{fixed(rival.weekly_sd, 0)}-point
         weekly swing, {rival.remaining} GWs left.
+        {rival.suggested_chase != null && (
+          <> To best serve that chance, set Chase or protect to {chaseSetting(rival.suggested_chase)} in Options.</>
+        )}
       </p>
     </section>
   );
+}
+
+/** The suggestion rounded to the slider's 0.005 steps, within its range. */
+function chaseSetting(k: number) {
+  const v = Math.max(-0.05, Math.min(0.05, Math.round(k / 0.005) * 0.005));
+  return Math.abs(v) < 1e-9 ? "0" : v.toFixed(3);
 }
 
 function chipStance(theirs: string[], yours: string[], name: string) {

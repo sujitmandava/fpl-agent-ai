@@ -214,6 +214,8 @@ assists than xA implies, so it gets only 25%.
 | what counts as a return | `returned()` |
 | fixture vs own record in the chance of a return | `RETURN_MODEL_WEIGHT` |
 | how much the optimiser prefers steady returners | `consistency` (`--consistency`, web app Options slider; `CONSISTENCY` in `milp.py`) |
+| how players in one match move together | `PAIR_CORR`, `VAR_BASE`, `VAR_SLOPE` (`correlation.py`) |
+| chasing / protecting a lead | `chase` (`--chase`, web app Options "Chase or protect"; suggested on the League page) |
 | a new scoring rule | add a line in `_fixture_points` and a profile rate in `player_profiles` |
 
 Always re-run the backtest after a change (`python fpl_agent.py backtest`).
@@ -228,6 +230,7 @@ gameweek in the horizon:
 ```
 maximise  Σ_gw 0.85^k · Σ_player xPts · (in XI + is captain + 0.1 × on bench)
           + consistency · Σ_gw 0.85^k · Σ_starter (P(return) − position average)
+          + chase · Σ_{pairs in one match, next GW} 2 · cov(i, j) · s_i · s_j
           − 4 × hits − ft_value × free transfers used
 ```
 
@@ -243,8 +246,76 @@ maximise  Σ_gw 0.85^k · Σ_player xPts · (in XI + is captain + 0.1 × on benc
   backtest, leaning harder on it cost points (top-20 average 4.98 at 0,
   4.88 at 0.5, 4.74 at 2) without making the picks return more often, so
   keep it modest.
+* **chase** (default 0): see §5a. Positive favours starters who score
+  together, negative favours starters who cover each other. Only the next
+  gameweek's XI, and not chip timing.
 * **Rules**: budget (selling prices for players you own), 2/5/5/3, ≤3 per club,
   a valid formation every week, locked and banned players from memory.
+
+---
+
+## 5a. Players in the same match (`forecast/correlation.py`)
+
+xPts add up whatever the players have to do with each other: two Arsenal
+defenders plus Haaland against Arsenal is worth the sum of their xPts. The
+*spread* of that trio is another matter. It rarely busts, but it can't haul,
+because Haaland's goal is the defenders' lost clean sheet. When you trail a
+rival, a capped ceiling costs you; when you lead, it protects you.
+
+**Measured.** Correlation of forecast errors (actual − xPts, one gameweek
+ahead, players with 2+ xPts) for pairs in the same match, GW4–11:
+
+| Pair | ρ |
+|---|---|
+| defenders/GK, same team | +0.55 |
+| attacker + defender, same team | +0.16 |
+| attackers, same team | +0.09 |
+| attacker vs opposing defender | −0.29 |
+| defenders, opposite sides | −0.18 |
+| attackers, opposite sides | −0.12 |
+
+The spread of a player's score grows with his xPts: variance ≈ 2 + 2.6 ×
+xPts. A pair's covariance is ρ × sd_i × sd_j; players in different matches
+are treated as independent.
+
+**In the optimiser.** `chase` is in points per point² of the next XI's
+variance, captain counted twice. At 0.05, Haaland against two of your own
+Arsenal defenders (about −10 pt²) costs 0.5 xPts, enough to bench him for
+Rogers in GW12. Pairs use continuous variables (exact, since lineups are
+binary), only for players with 1.5+ xPts and the 10 likeliest captains; the
+solve stays at a second or two.
+
+**What value to use.** With the chance of finishing above a rival ≈
+Φ((edge − gap) / (weekly swing · √weeks left)), one extra point² of variance
+in a week is worth (gap − edge) / (2 · swing² · weeks left) points. That is
+`suggested_chase` in `league.py`, shown on the League page and in
+`league`. At GW11, 42 behind with 27 left and a ±11.8 swing, it's 0.003: too
+small to change anything. Typical values: 8 left and 30 behind ≈ 0.013;
+last week and 15 behind ≈ 0.05. Leading gives a negative value (hedge).
+
+**Checked** (`python fpl_agent.py backtest-chase`): a fresh £100m XI each
+week, GW5–11, correlations refit each week from earlier weeks only.
+
+| chase | xPts/week | predicted sd | realised sd of (actual − xPts) | best week | worst week |
+|---|---|---|---|---|---|
+| 0 | 56.7 | 15.3 | 15.6 | 75 | 37 |
+| 0.02 | 56.4 | 16.4 | 16.8 | 82 | 37 |
+| 0.05 | 55.4 | 17.2 | 18.5 | 89 | 35 |
+| 0.1 | 54.6 | 17.4 | 17.9 | 89 | 35 |
+
+* The spread model is calibrated: predicted and realised sd agree, and the
+  standardised misses have sd ≈ 1.0 at every setting.
+* The correlations hold out of sample: fitted before GW8 vs measured on
+  GW8+, every pair type kept its sign and size (e.g. opposite AD −0.27 vs
+  −0.31, same-team DD +0.52 vs +0.57).
+* Cost: 0.3 xPts a week at 0.02, 1.3 at 0.05, 2.1 at 0.1, for +1.1, +1.9
+  and +2.1 points of sd. Real points per week didn't drop (55.6, 56.1,
+  55.7, 57.0), but seven weeks can't tell differences that small apart.
+
+**Not modelled:** players you share with the rival (they move both scores,
+so they add nothing to the spread of the gap); individual players' own
+variance (chase only looks at how picks move together, so it never prefers
+a boom-or-bust player by himself); captaincy pairs beyond the top 10.
 
 ---
 

@@ -8,6 +8,7 @@ so you can simply run:
     python fpl_agent.py memory --help    # overrides, locked/banned players, notes
     python fpl_agent.py backtest         # check forecast accuracy on past gameweeks
     python fpl_agent.py hypotheses       # re-test open hypotheses (run after each gameweek)
+    python fpl_agent.py backtest-chase   # test the chase setting on past gameweeks
     python fpl_agent.py api              # JSON API for the web app
 
 ID is your FPL team ID (the number in your Points page link); set FPL_MANAGER_ID
@@ -112,6 +113,9 @@ _plan_options = [
                  help="Points a saved free transfer is worth (higher = fewer, surer moves)."),
     click.option("--consistency", type=float, default=0.5, show_default=True,
                  help="Preference for players who return week after week (0 = pure xPts)."),
+    click.option("--chase", type=click.FloatRange(-0.1, 0.1), default=0.0, show_default=True,
+                 help="Favour picks that score together (>0, when chasing) or hedge each "
+                      "other (<0, protecting a lead). `league` suggests a value."),
 ]
 
 
@@ -293,7 +297,7 @@ def league(ctx: click.Context, league_id: int | None, rival: str | None, **kwarg
         f"Gap: [bold]{-h.gap:+d}[/] · your edge {h.edge_per_gw:+.1f} xPts/GW over the next "
         f"{len(h.by_gw)} (both squads held) · weekly swing ±{h.weekly_sd:.0f}\n"
         f"Rough chance to finish above {target.team_name}: [bold]{h.p_ahead:.0%}[/] "
-        f"({h.remaining} GWs left)\n"
+        f"({h.remaining} GWs left) · suggested --chase {h.suggested_chase:g}\n"
         f"Shared players: {len(h.shared)}/15. Captains: "
         + ", ".join(f"GW{r.gw} {name.get(r.your_captain)} vs {name.get(r.their_captain)}"
                     for r in h.by_gw.itertuples()),
@@ -553,6 +557,41 @@ def backtest(ctx: click.Context, horizon: int, windows: int) -> None:
             f"[bold]{m.at['xpts', top]:.1f}[/] pts each vs {m.at['ppg_baseline', top]:.1f}.")
     console.print("[dim]Lower MAE and higher correlation are better. topN_actual_avg is the real "
                   "average score of the model's top picks each gameweek.[/]")
+
+# -- backtest-chase -----------------------------------------------------------
+
+@cli.command("backtest-chase")
+@click.option("--levels", default="0,0.02,0.05,0.1", show_default=True,
+              help="Comma-separated chase settings to compare.")
+@click.pass_context
+def backtest_chase(ctx: click.Context, levels: str) -> None:
+    """Test the chase setting walk-forward: spread model and what it costs."""
+    from fpl_agent.optimizer.chase_backtest import run_chase_backtest
+    store = FPLStore(db_path=ctx.obj["db"])
+    try:
+        players, history = store.players_df(), store.player_history_df()
+        fixtures, teams = store.fixtures_df(), store.teams_df()
+        scoring, gw = store.scoring_rules(), store.current_gameweek()
+    finally:
+        store.close()
+    last_done = gw - 1 if not fixtures[fixtures["event"] == gw]["finished"].fillna(0).all() else gw
+    weeks = list(range(4, last_done + 1))
+    if len(weeks) < 3:
+        raise click.ClickException("Not enough completed gameweeks to backtest yet.")
+    chase_levels = tuple(float(v) for v in levels.split(","))
+    with console.status("Backtesting chase…"):
+        out = run_chase_backtest(players, history, fixtures, teams, scoring, weeks, chase_levels)
+    for key, title in (("summary", "Fresh £100m XI per week, by chase setting"),
+                       ("pairs", "Pair correlations of forecast errors, same match")):
+        df = out[key]
+        t = Table(title=title)
+        for col in df.columns:
+            t.add_column(str(col))
+        for r in df.itertuples(index=False):
+            t.add_row(*[str(v) for v in r])
+        console.print(t)
+    console.print("[dim]predicted_sd vs realised_sd (and z_sd near 1) check the spread model; xpts "
+                  "is what chasing costs. 'actual' over a handful of weeks is mostly noise.[/]")
 
 # -- hypotheses ---------------------------------------------------------------
 

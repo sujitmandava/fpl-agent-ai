@@ -65,6 +65,7 @@ export interface Rival {
   weekly_sd: number | null;
   p_ahead: number | null;
   remaining: number;
+  suggested_chase: number | null; // optimiser chase setting that best serves finishing above them
   captain: number | null;
   active_chip: string | null;
   chips_now: string[];

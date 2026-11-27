@@ -12,6 +12,7 @@ Objective (maximise)::
 
     Σ_g  w_g · Σ_i  EP[i,g] · ( y[i,g] + c[i,g] + bench_weight · (x[i] − y[i,g]) )
       + consistency · Σ_g w_g · Σ_i  (P_return[i,g] − position avg) · y[i,g]
+      + chase · Σ_{i,j same match} 2 · cov[i,j,g₁] · s[i,g₁] · s[j,g₁]     (first gameweek)
       − 4 · hits − ft_value · free_transfers_used
 
 * ``w_g = discount^(g − first_gw)`` – later gameweeks are less certain and the
@@ -31,6 +32,17 @@ Objective (maximise)::
   return than his position's average is worth an extra 0.1 points a week:
   enough to settle close calls, not to override a clear xPts gap. Captaincy
   ignores it; the armband is about ceiling.
+
+* ``chase`` rewards a lineup whose players score *together* and penalises one
+  whose players cancel out, through the covariance of players in the same
+  match (``forecast.correlation``): two defenders of one club share a clean
+  sheet (stack), a striker and the defenders facing him can't all return
+  (clash). ``s = y + c`` so the captain's pairs count double. It is in points
+  per point² of the XI's weekly variance, for the first gameweek's XI only
+  (later lineups are re-picked before they're played): at 0.05, starting Haaland against
+  two of your own Arsenal defenders (about −10 pt²) costs 0.5 xPts. It never
+  changes xPts, only the spread around them, so it is for chasing a rival:
+  0 (the default) is pure expected points. Needs *fixtures*.
 
 Constraints: 15 players, 2/5/5/3 by position, ≤3 per club, budget, and in
 every gameweek a valid XI (1 GK, 3–5 DEF, 2–5 MID, 1–3 FWD) with one captain.
@@ -54,6 +66,8 @@ from pulp import (
     value,
 )
 
+from fpl_agent.forecast.correlation import lineup_sd, opponents_by_gw, pair_covariances
+
 logger = logging.getLogger(__name__)
 
 POSITION_LIMITS = {1: 2, 2: 5, 3: 5, 4: 3}  # element_type → squad count
@@ -68,6 +82,9 @@ BENCH_WEIGHT = 0.1
 DISCOUNT = 0.85
 FT_VALUE = 1.0
 CONSISTENCY = 0.5
+CHASE = 0.0
+# Captaincy pair terms only for the likeliest captains each week (MILP size).
+CHASE_CAPTAIN_POOL = 10
 # Candidate pool per position (plus best value-for-money picks and the current
 # squad). Keeps the MILP small without excluding realistic options.
 POOL_TOP_EP = 40
@@ -117,6 +134,8 @@ class OptimizationResult:
     captains: dict[int, int] = field(default_factory=dict)        # gw → captain
     bench_points: dict[int, float] = field(default_factory=dict)  # gw → EP of the 4 subs
     captain_points: dict[int, float] = field(default_factory=dict)  # gw → captain's EP
+    # gw → standard deviation of the XI's score (captain doubled); needs fixtures.
+    spread: dict[int, float] = field(default_factory=dict)
 
 
 def gameweek_columns(forecast: pd.DataFrame) -> list[tuple[int, str]]:
@@ -134,6 +153,9 @@ def optimize(
     discount: float = DISCOUNT,
     ft_value: float = FT_VALUE,
     consistency: float = CONSISTENCY,
+    chase: float = CHASE,
+    fixtures: pd.DataFrame | None = None,
+    pair_corr: dict | None = None,
     max_transfers: int | None = None,
     unlimited_transfers: bool = False,
     locked: set[int] | None = None,
@@ -157,6 +179,13 @@ def optimize(
     bench_weight, discount, ft_value, consistency : float
         See module docstring. ``consistency`` needs ``p_return_gw{N}``
         columns in *forecast*; without them it has no effect.
+    chase : float
+        See module docstring. Needs *fixtures* (``event``, ``team_h``,
+        ``team_a``) to know who plays whom; without them it has no effect.
+    fixtures : DataFrame, optional
+        Also used to report each XI's ``spread``.
+    pair_corr : dict, optional
+        Override ``forecast.correlation.PAIR_CORR`` (the backtest fits its own).
     max_transfers : int, optional
         Hard cap on transfers (0 evaluates the current squad as-is).
     unlimited_transfers : bool
@@ -219,6 +248,12 @@ def optimize(
     ret_edge = {(pid, g): float(v) for g in edge_cols
                 for pid, v in zip(merged["id"], merged[f"ret_edge_{g}"])}
 
+    pairs: dict[int, list[tuple[int, int, float]]] = {}
+    if fixtures is not None:
+        opps = opponents_by_gw(fixtures, gws)
+        for g in gws:
+            pairs[g] = pair_covariances(merged, {i: ep[i, g] for i in ids}, opps[g], pair_corr)
+
     prob = LpProblem("FPL_Squad_Selection", LpMaximize)
     x = {i: LpVariable(f"x_{i}", cat="Binary") for i in ids}
     y = {(i, g): LpVariable(f"y_{i}_{g}", cat="Binary") for i in ids for g in gws}
@@ -246,7 +281,29 @@ def optimize(
         weights[g] * consistency * ret_edge[i, g] * y[i, g]
         for i in ids for g in edge_cols
     ) if consistency else 0
-    prob += points + steadiness - TRANSFER_HIT * h - ft_value * ft_lost, "objective"
+    spread_terms = []
+    if chase and pairs:
+        # Only the week being set: later lineups are re-picked before then, and
+        # pair terms for every week make the MILP many times slower.
+        for g in gws[:1]:
+            top_cap = set(sorted(ids, key=lambda i: ep[i, g], reverse=True)[:CHASE_CAPTAIN_POOL])
+            for n, (i, j, cov) in enumerate(pairs[g]):
+                products = [(y[i, g], y[j, g])]
+                if i in top_cap:
+                    products.append((c[i, g], y[j, g]))
+                if j in top_cap:
+                    products.append((y[i, g], c[j, g]))
+                for m, (a, b) in enumerate(products):
+                    z = LpVariable(f"pair_{g}_{n}_{m}", lowBound=0, upBound=1)
+                    coef = weights[g] * chase * 2 * cov
+                    if coef > 0:     # rewarded: z may be 1 only if both start
+                        prob += z <= a
+                        prob += z <= b
+                    else:            # penalised: z must be 1 if both start
+                        prob += z >= a + b - 1
+                    spread_terms.append(coef * z)
+    prob += (points + steadiness + lpSum(spread_terms)
+             - TRANSFER_HIT * h - ft_value * ft_lost), "objective"
 
     # -- Squad constraints ----------------------------------------------------
     prob += lpSum(x.values()) == SQUAD_SIZE, "squad_size"
@@ -306,6 +363,8 @@ def optimize(
     captains = {g: next(i for i in lineups[g] if chosen(c[i, g])) for g in gws}
     bench_points = {g: round(sum(ep[i, g] for i in selected if i not in lineups[g]), 2) for g in gws}
     captain_points = {g: round(ep[captains[g], g], 2) for g in gws}
+    spread = {g: round(lineup_sd(lineups[g], captains[g], {i: ep[i, g] for i in ids}, pairs[g]), 2)
+              for g in pairs}
 
     details = merged[merged["id"].isin(selected)].sort_values("total_expected_points", ascending=False)
     total_ep = float(details["total_expected_points"].sum())
@@ -334,6 +393,7 @@ def optimize(
         captains=captains,
         bench_points=bench_points,
         captain_points=captain_points,
+        spread=spread,
     )
 
 

@@ -265,6 +265,7 @@ class PlanOptions:
     bench_weight: float = 0.1
     ft_value: float = 1.0
     consistency: float = 0.5              # preference for steady returners
+    chase: float = 0.0                    # >0 favours picks that score together (chasing)
     # Locked/banned player ids for this request; None = use the team's memory.
     locked: frozenset[int] | None = None
     banned: frozenset[int] | None = None
@@ -319,7 +320,7 @@ def plan_from_setup(setup: Setup, opts: PlanOptions, record: bool = True) -> Pla
     forecast = model.predict()
 
     common = dict(bench_weight=opts.bench_weight, ft_value=opts.ft_value,
-                  consistency=opts.consistency,
+                  consistency=opts.consistency, chase=opts.chase, fixtures=setup.fixtures,
                   locked=set(memory.locked_ids if opts.locked is None else opts.locked),
                   banned=set(memory.banned_ids if opts.banned is None else opts.banned))
     names = dict(zip(setup.players["id"], setup.players["web_name"]))
@@ -355,6 +356,8 @@ def _chip_plan(setup: Setup, opts: PlanOptions, team_state: TeamState,
     Looks past the user's horizon: a chip that expires after GW19 has to be
     planned against every week left before then.
     """
+    # Chip timing compares expected points; the chase preference would skew it.
+    common = {**common, "chase": 0.0}
     open_chips = [c for c in setup.chips if c.get("status") == "available"]
     if not open_chips:
         return None, []
