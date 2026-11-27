@@ -194,6 +194,25 @@ class HeadToHead:
     weekly_sd: float              # spread of the weekly points difference so far
     remaining: int                # gameweeks left after the current one
     p_ahead: float                # rough chance of finishing above this rival
+    suggested_chase: float = 0.0  # optimiser `chase` that maximises p_ahead (negative = protect)
+
+
+CHASE_RANGE = (-0.1, 0.1)
+
+
+def suggested_chase(gap: float, expected_edge: float, weekly_sd: float, remaining: int) -> float:
+    """The optimiser's ``chase`` that best serves finishing above a rival.
+
+    With the chance of finishing above ≈ Φ((edge − gap) / (weekly_sd · √remaining)),
+    one extra point² of variance in a week's score is worth
+    (gap − edge) / (2 · weekly_sd² · remaining) points: positive when you trail
+    (take risk), negative when you lead (hedge). *gap* is rival − you.
+    Ignores players you share with the rival, which move both scores together.
+    """
+    if remaining <= 0 or weekly_sd <= 0:
+        return 0.0
+    k = (gap - expected_edge) / (2 * weekly_sd ** 2 * remaining)
+    return round(min(max(k, CHASE_RANGE[0]), CHASE_RANGE[1]), 4)
 
 
 def head_to_head(snap: LeagueSnapshot, rival_entry: int, forecast: pd.DataFrame,
@@ -237,7 +256,9 @@ def head_to_head(snap: LeagueSnapshot, rival_entry: int, forecast: pd.DataFrame,
         p = 0.5 * (1 + math.erf(z / math.sqrt(2)))
     else:
         p = 1.0 if gap < 0 else 0.0
-    return HeadToHead(rival=rival, gap=gap, shared=sorted(mine & theirs),
+    return HeadToHead(suggested_chase=suggested_chase(gap, edge * min(len(gws), remaining),
+                                                      sd, remaining),
+                      rival=rival, gap=gap, shared=sorted(mine & theirs),
                       mine_only=sorted(mine - theirs), theirs_only=sorted(theirs - mine),
                       by_gw=by_gw, edge_per_gw=round(edge, 2), weekly_sd=round(sd, 1),
                       remaining=remaining, p_ahead=p)

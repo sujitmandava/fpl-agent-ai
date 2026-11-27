@@ -23,6 +23,7 @@ export function planQuery(s: TeamSettings, fresh = false): string {
     ft_value: String(s.ftValue),
     bench_weight: String(s.benchWeight),
     consistency: String(s.consistency),
+    chase: String(s.chase),
     locked: s.locked.join(","),
     banned: s.banned.join(","),
   });

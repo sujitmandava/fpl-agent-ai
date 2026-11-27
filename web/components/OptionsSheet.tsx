@@ -92,6 +92,8 @@ export default function OptionsSheet({
                  value={s.benchWeight} onChange={(v) => onChange({ benchWeight: v })} />
           <Range label="Prefer steady returners" hint="0 is pure expected points; higher favours players who return week after week."
                  min={0} max={2} step={0.25} value={s.consistency} onChange={(v) => onChange({ consistency: v })} />
+          <Range label="Chase or protect" hint="Above 0 favours picks that score together, for chasing a rival; below 0 favours picks that cover each other, for protecting a lead. The League page suggests a value."
+                 min={-0.05} max={0.05} step={0.005} value={s.chase} onChange={(v) => onChange({ chase: v })} />
         </details>
 
         <div className={styles.footer}>

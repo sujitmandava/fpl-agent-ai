@@ -240,6 +240,7 @@ def league_payload(league, forecast: pd.DataFrame, players: pd.DataFrame, my_squ
             "rank": rival.rank, "gap": me.total - rival.total,
             "edge_per_gw": _num(h.edge_per_gw), "weekly_sd": _num(h.weekly_sd),
             "p_ahead": _num(h.p_ahead), "remaining": h.remaining,
+            "suggested_chase": _num(h.suggested_chase),
             "captain": rival.captain, "active_chip": rival.active_chip,
             "chips_now": rival.chips_now, "chips_later": rival.chips_later, "squad": rival.squad,
             "shared": h.shared, "mine_only": h.mine_only, "theirs_only": h.theirs_only,
@@ -371,6 +372,7 @@ def team_plan(
     ft_value: float = Query(1.0, ge=0, le=3),
     bench_weight: float = Query(0.1, ge=0, le=0.5),
     consistency: float = Query(0.5, ge=0, le=2),
+    chase: float = Query(0.0, ge=-0.1, le=0.1),
     league: int | None = None,
     rival: int | None = None,
     locked: str | None = Query(None, description="Comma-separated player ids"),
@@ -379,7 +381,7 @@ def team_plan(
 ) -> dict:
     if team_id <= 0:
         raise HTTPException(400, "Team IDs are positive numbers.")
-    key = (team_id, horizon, chip, free_transfers, bank, ft_value, bench_weight, consistency,
+    key = (team_id, horizon, chip, free_transfers, bank, ft_value, bench_weight, consistency, chase,
            league, rival, _ids(locked), _ids(banned))
     try:
         setup = _setup(team_id, league, fresh)
@@ -391,7 +393,7 @@ def team_plan(
         plan = engine.plan_from_setup(setup, PlanOptions(
             horizon=horizon, free_transfers=free_transfers, bank=bank,
             wildcard=chip == "wildcard", free_hit=chip == "freehit",
-            bench_weight=bench_weight, ft_value=ft_value, consistency=consistency,
+            bench_weight=bench_weight, ft_value=ft_value, consistency=consistency, chase=chase,
             locked=_ids(locked), banned=_ids(banned),
         ), record=False)
     except DataNotReady as exc:
